@@ -6,6 +6,7 @@
 
 export const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? 'https://oyaib.vercel.app';
+  //https://oyaib.vercel.app
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
