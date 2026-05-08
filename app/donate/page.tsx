@@ -7,14 +7,14 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { submitHelper, type HelperPayload } from '../../lib/api'; // 👈 import the API
 
-const amounts = [1000, 2500, 5000, 10000, 25000, 50000];
+const amounts = [2500, 5000, 10000, 20000, 25000, 50000, 100000, 250000, 500000];
 
 const impact = [
-  { amount: '₦1,000', desc: 'Provides a nutritious meal for one elder for a week.' },
-  { amount: '₦5,000', desc: 'Funds a home care visit with a trained caregiver.' },
-  { amount: '₦10,000', desc: 'Covers a month of medication for one elderly beneficiary.' },
-  { amount: '₦25,000', desc: 'Supports one elder through our Social Welfare program for a month.' },
-  { amount: '₦50,000', desc: 'Sponsors complete holistic care for one elder for a full month.' },
+  { amount: '₦20,000', desc: 'Provides a nutritious meal for one elder for a week.' },
+  { amount: '₦20,000', desc: 'Funds a home care visit with a trained caregiver.' },
+  { amount: '₦20,000', desc: 'Covers a month of medication for one elderly beneficiary.' },
+  { amount: '₦50,000', desc: 'Supports one elder through our Social Welfare program for a month.' },
+  { amount: '₦100,000', desc: 'Sponsors complete holistic care for one elder for a full month.' },
 ];
 
 export default function DonatePage() {
