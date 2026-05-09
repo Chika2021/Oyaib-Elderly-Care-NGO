@@ -567,112 +567,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ══ COMMUNITY CHAT ══ */}
-      <section ref={chatRef.ref} style={{ padding: 'clamp(60px,10vw,100px) clamp(20px,5vw,32px)', background: 'white' }}>
-        <div style={{ maxWidth: 780, margin: '0 auto', opacity: chatRef.inView ? 1 : 0, transform: chatRef.inView ? 'translateY(0)' : 'translateY(40px)', transition: 'all 0.7s cubic-bezier(0.16,1,0.3,1)' }}>
-
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: '#c8832a14', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <MessageCircle size={22} color="#c8832a" />
-            </div>
-            <div>
-              <h2 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 'clamp(1.6rem,3vw,2.4rem)', fontWeight: 700, color: 'var(--deep)', margin: 0 }}>Community Chat</h2>
-              <p style={{ color: 'var(--text-mid, #666)', fontSize: '0.88rem', margin: 0 }}>Share thoughts, ask questions, encourage one another</p>
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: 'var(--border, #e5e7eb)', margin: '24px 0' }} />
-
-          {/* Messages list */}
-          <div style={{ minHeight: 200, maxHeight: 480, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24, paddingRight: 4 }}>
-            {chatLoading && <p style={{ color: 'var(--text-lt, #999)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>Loading messages…</p>}
-            {!chatLoading && messages.length === 0 && (
-              <p style={{ color: 'var(--text-lt, #999)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>No messages yet. Be the first to say hello! 👋</p>
-            )}
-            {messages.map(msg => (
-              <div key={msg.id} style={{ background: 'var(--cream, #faf8f4)', borderRadius: 14, padding: '16px 18px', border: '1px solid var(--border, #e5e7eb)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#c8832a,#e0a355)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: 700 }}>{(msg.authorName || 'A')[0].toUpperCase()}</span>
-                    </div>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--deep)' }}>{msg.authorName || 'Anonymous'}</span>
-                  </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-lt, #999)', whiteSpace: 'nowrap' }}>{formatTime(msg.createdAt)}</span>
-                </div>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-mid, #444)', lineHeight: 1.7, margin: '0 0 12px' }}>{msg.content}</p>
-
-                {/* Reply controls */}
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <button onClick={() => setReplyTo(replyTo?.id === msg.id ? null : msg)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#c8832a', fontWeight: 600, padding: 0 }}>
-                    {replyTo?.id === msg.id ? 'Cancel' : '↩ Reply'}
-                  </button>
-                  <button onClick={() => toggleReplies(msg)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text-lt, #999)', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {expandedReplies.has(msg.id) ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    {expandedReplies.has(msg.id) ? 'Hide replies' : 'View replies'}
-                  </button>
-                </div>
-
-                {/* Inline reply form */}
-                {replyTo?.id === msg.id && (
-                  <div style={{ marginTop: 14, padding: '14px 16px', background: 'white', borderRadius: 10, border: '1px solid var(--border, #e5e7eb)' }}>
-                    <input value={replyName} onChange={e => setReplyName(e.target.value)} placeholder="Your name (optional)"
-                      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '0.85rem', color: 'var(--deep)', marginBottom: 8, outline: 'none' }} />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input value={replyContent} onChange={e => setReplyContent(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && sendReply(msg.id)}
-                        placeholder="Write a reply…"
-                        style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '0.85rem', color: 'var(--deep)', outline: 'none' }} />
-                      <button onClick={() => sendReply(msg.id)} disabled={sending || !replyContent.trim()}
-                        style={{ background: '#c8832a', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: sending ? 0.6 : 1 }}>
-                        <Send size={13} color="white" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Replies */}
-                {expandedReplies.has(msg.id) && msg.replies && (
-                  <div style={{ marginTop: 12, paddingLeft: 16, borderLeft: '2px solid #c8832a33', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {msg.replies.length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--text-lt, #999)' }}>No replies yet.</p>}
-                    {msg.replies.map(r => (
-                      <div key={r.id} style={{ background: 'white', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border, #e5e7eb)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--deep)' }}>{r.authorName || 'Anonymous'}</span>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-lt, #999)' }}>{formatTime(r.createdAt)}</span>
-                        </div>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-mid, #444)', lineHeight: 1.6, margin: 0 }}>{r.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* New message form */}
-          <div style={{ background: 'var(--cream, #faf8f4)', border: '1px solid var(--border, #e5e7eb)', borderRadius: 16, padding: '20px 20px 16px' }}>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name (optional)"
-              style={{ width: '100%', background: 'white', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '10px 14px', fontSize: '0.88rem', color: 'var(--deep)', marginBottom: 10, outline: 'none', boxSizing: 'border-box' }} />
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-              <textarea value={content} onChange={e => setContent(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder="Share a thought, ask a question, or encourage someone…"
-                rows={3}
-                style={{ flex: 1, background: 'white', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '10px 14px', fontSize: '0.88rem', color: 'var(--deep)', resize: 'none', outline: 'none', lineHeight: 1.6, fontFamily: 'inherit' }} />
-              <button onClick={sendMessage} disabled={sending || !content.trim()}
-                style={{ background: sending || !content.trim() ? '#ccc' : 'linear-gradient(135deg,#c8832a,#e0a355)', border: 'none', borderRadius: 12, padding: '14px 18px', cursor: sending || !content.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, color: 'white', fontWeight: 600, fontSize: '0.88rem', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
-                <Send size={15} /> {sending ? 'Sending…' : 'Post'}
-              </button>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-lt, #999)', margin: '10px 0 0' }}>Press Enter to post · Shift+Enter for new line</p>
-          </div>
-        </div>
-      </section>
-
       {/* ══ CTA — Magnetic buttons + zoom-out ══ */}
       <section ref={ctaRef.ref} style={{ padding: 'clamp(60px,10vw,100px) clamp(20px,5vw,32px)', background: 'var(--amber)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <FloatingOrb style={{ width: 400, height: 400, background: 'rgba(255,255,255,0.08)', top: '-30%', right: '-10%' }} />
@@ -687,6 +581,110 @@ export default function AboutPage() {
             <Link href="/get-involved" ref={magneticInvolve as React.Ref<HTMLAnchorElement>} className="btn-outline" style={{ borderColor: 'rgba(255,255,255,0.5)', color: 'white', transition: 'transform 0.2s ease', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               Get Involved <ArrowRight size={15} />
             </Link>
+          </div>
+
+          {/* ══ COMMUNITY CHAT ══ */}
+          <div ref={chatRef.ref} style={{ marginTop: 60, textAlign: 'left', opacity: chatRef.inView ? 1 : 0, transform: chatRef.inView ? 'translateY(0)' : 'translateY(40px)', transition: 'all 0.7s cubic-bezier(0.16,1,0.3,1)' }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MessageCircle size={22} color="white" />
+              </div>
+              <div>
+                <h2 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 'clamp(1.6rem,3vw,2.4rem)', fontWeight: 700, color: 'white', margin: 0 }}>Community Chat</h2>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.88rem', margin: 0 }}>Share thoughts, ask questions, encourage one another</p>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.2)', margin: '24px 0' }} />
+
+            {/* Messages list */}
+            <div style={{ minHeight: 200, maxHeight: 480, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24, paddingRight: 4 }}>
+              {chatLoading && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>Loading messages…</p>}
+              {!chatLoading && messages.length === 0 && (
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>No messages yet. Be the first to say hello! 👋</p>
+              )}
+              {messages.map(msg => (
+                <div key={msg.id} style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '16px 18px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: 700 }}>{(msg.authorName || 'A')[0].toUpperCase()}</span>
+                      </div>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'white' }}>{msg.authorName || 'Anonymous'}</span>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{formatTime(msg.createdAt)}</span>
+                  </div>
+                  <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, margin: '0 0 12px' }}>{msg.content}</p>
+
+                  {/* Reply controls */}
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <button onClick={() => setReplyTo(replyTo?.id === msg.id ? null : msg)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'white', fontWeight: 600, padding: 0 }}>
+                      {replyTo?.id === msg.id ? 'Cancel' : '↩ Reply'}
+                    </button>
+                    <button onClick={() => toggleReplies(msg)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {expandedReplies.has(msg.id) ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                      {expandedReplies.has(msg.id) ? 'Hide replies' : 'View replies'}
+                    </button>
+                  </div>
+
+                  {/* Inline reply form */}
+                  {replyTo?.id === msg.id && (
+                    <div style={{ marginTop: 14, padding: '14px 16px', background: 'rgba(255,255,255,0.1)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)' }}>
+                      <input value={replyName} onChange={e => setReplyName(e.target.value)} placeholder="Your name (optional)"
+                        style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '0.85rem', color: 'white', marginBottom: 8, outline: 'none' }} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input value={replyContent} onChange={e => setReplyContent(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && sendReply(msg.id)}
+                          placeholder="Write a reply…"
+                          style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '0.85rem', color: 'white', outline: 'none' }} />
+                        <button onClick={() => sendReply(msg.id)} disabled={sending || !replyContent.trim()}
+                          style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: sending ? 0.6 : 1 }}>
+                          <Send size={13} color="white" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Replies */}
+                  {expandedReplies.has(msg.id) && msg.replies && (
+                    <div style={{ marginTop: 12, paddingLeft: 16, borderLeft: '2px solid rgba(255,255,255,0.3)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {msg.replies.length === 0 && <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>No replies yet.</p>}
+                      {msg.replies.map(r => (
+                        <div key={r.id} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '12px 14px', border: '1px solid rgba(255,255,255,0.15)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'white' }}>{r.authorName || 'Anonymous'}</span>
+                            <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>{formatTime(r.createdAt)}</span>
+                          </div>
+                          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.6, margin: 0 }}>{r.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* New message form */}
+            <div style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 16, padding: '20px 20px 16px' }}>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name (optional)"
+                style={{ width: '100%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: '0.88rem', color: 'white', marginBottom: 10, outline: 'none', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <textarea value={content} onChange={e => setContent(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  placeholder="Share a thought, ask a question, or encourage someone…"
+                  rows={3}
+                  style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: '0.88rem', color: 'white', resize: 'none', outline: 'none', lineHeight: 1.6, fontFamily: 'inherit' }} />
+                <button onClick={sendMessage} disabled={sending || !content.trim()}
+                  style={{ background: sending || !content.trim() ? 'rgba(255,255,255,0.2)' : 'white', border: 'none', borderRadius: 12, padding: '14px 18px', cursor: sending || !content.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, color: sending || !content.trim() ? 'rgba(255,255,255,0.5)' : 'var(--amber)', fontWeight: 600, fontSize: '0.88rem', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
+                  <Send size={15} /> {sending ? 'Sending…' : 'Post'}
+                </button>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: '10px 0 0' }}>Press Enter to post · Shift+Enter for new line</p>
+            </div>
           </div>
         </div>
       </section>
