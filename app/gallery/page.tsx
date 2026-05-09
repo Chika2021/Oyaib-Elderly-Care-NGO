@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { BASE_URL, type Submission } from '../../lib/api';
+import { BASE_URL, fetchFieldPhotos, type Submission, type FieldPhoto } from '../../lib/api';
 
 // ─── YouTube helpers ───────────────────────────────────────────────────────────
 
@@ -12,6 +12,14 @@ function getYouTubeId(url: string): string | null {
     /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
   return match ? match[1] : null;
+}
+
+function isCloudinaryVideo(url: string): boolean {
+  if (!url) return false;
+  return url.includes('res.cloudinary.com') && (
+    url.includes('/video/upload/') ||
+    /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(url)
+  );
 }
 
 function normalise(raw: any): Submission {
@@ -382,7 +390,7 @@ export default function GalleryPage() {
   const [photoOfMonth, setPhotoOfMonth] = useState<{ src: string; caption: string; month: string } | null>(null);
 
   // Photos from the Field — read from localStorage (set via admin dashboard)
-  const [fieldPhotos, setFieldPhotos] = useState<{ src: string; caption: string }[] | null>(null);
+  const [fieldPhotos, setFieldPhotos] = useState<FieldPhoto[] | null>(null);
 
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -407,6 +415,15 @@ export default function GalleryPage() {
     }
   }, []);
 
+  const loadFieldPhotos = useCallback(async () => {
+    try {
+      const data = await fetchFieldPhotos();
+      setFieldPhotos(data);
+    } catch {
+      setFieldPhotos([]);
+    }
+  }, []);
+
   const loadMessages = useCallback(async (isRefresh = false) => {
     if (isRefresh) setChatRefreshing(true);
     else setChatLoading(true);
@@ -424,18 +441,12 @@ export default function GalleryPage() {
 
   useEffect(() => { loadVideos(); }, [loadVideos]);
   useEffect(() => { loadMessages(); }, [loadMessages]);
+  useEffect(() => { loadFieldPhotos(); }, [loadFieldPhotos]);
   useEffect(() => {
     try {
       const saved = localStorage.getItem('oyaib_photo_of_month');
       if (saved) setPhotoOfMonth(JSON.parse(saved));
     } catch {}
-    try {
-      const savedField = localStorage.getItem('oyaib_field_photos');
-      if (savedField) setFieldPhotos(JSON.parse(savedField));
-      else setFieldPhotos([]);
-    } catch {
-      setFieldPhotos([]);
-    }
   }, []);
 
   function handleNewMessage(msg: Message) {
@@ -716,134 +727,115 @@ export default function GalleryPage() {
               }}
             >
               {videos.map((video) => {
-                const youtubeId = video.youtubeUrl ? getYouTubeId(video.youtubeUrl) : null;
+                const url = video.youtubeUrl || '';
+                const youtubeId = getYouTubeId(url);
+                const isCloudinary = isCloudinaryVideo(url);
 
-                if (!youtubeId) return (
-                  <div
-                    key={video.id}
-                    style={{
-                      background: 'white',
-                      borderRadius: 16,
-                      overflow: 'hidden',
-                      boxShadow: 'var(--shadow)',
-                      border: '1px dashed #e2e8f0',
-                    }}
-                  >
-                    <div style={{
-                      height: 220,
-                      background: '#f8fafc',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      color: '#94a3b8',
-                      fontSize: '0.85rem',
-                      padding: '0 20px',
-                      textAlign: 'center',
-                    }}>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="4"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
-                      <span>Could not load video</span>
-                      {video.youtubeUrl && (
-                        <a href={video.youtubeUrl} target="_blank" rel="noopener noreferrer"
-                          style={{ color: '#6366f1', fontSize: '0.78rem', wordBreak: 'break-all' }}>
-                          Open link ↗
-                        </a>
-                      )}
-                    </div>
-                    <div style={{ padding: '16px 20px 20px' }}>
-                      <h3 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '1.2rem', marginBottom: 6, color: 'var(--deep)' }}>
-                        {video.videoTitle || 'Untitled Video'}
-                      </h3>
-                      {video.videoDescription && (
-                        <p style={{ fontSize: '0.9rem', color: 'var(--muted)', lineHeight: 1.5 }}>
-                          {video.videoDescription}
-                        </p>
-                      )}
+                const cardInfo = (
+                  <div style={{ padding: '16px 20px 20px' }}>
+                    <h3 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '1.2rem', marginBottom: 6, color: 'var(--deep)' }}>
+                      {video.videoTitle || 'Untitled Video'}
+                    </h3>
+                    {video.videoDescription && (
+                      <p style={{ fontSize: '0.9rem', color: 'var(--muted)', lineHeight: 1.5 }}>
+                        {video.videoDescription}
+                      </p>
+                    )}
+                  </div>
+                );
+
+                const playButton = (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 56, height: 56, background: 'rgba(255,255,255,0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--deep)"><polygon points="5,3 19,12 5,21" /></svg>
                     </div>
                   </div>
                 );
 
-                return (
-                  <div
-                    key={video.id}
-                    style={{
-                      background: 'white',
-                      borderRadius: 16,
-                      overflow: 'hidden',
-                      boxShadow: 'var(--shadow)',
-                      transition: 'transform 0.2s',
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
-                    onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
-                  >
-                    {activeVideo === video.id ? (
-                      <iframe
-                        width="100%"
-                        height="220"
-                        src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
-                        title={video.videoTitle || 'Video'}
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        style={{ display: 'block' }}
-                      />
-                    ) : (
-                      <div
-                        style={{ position: 'relative', cursor: 'pointer' }}
-                        onClick={() => setActiveVideo(video.id)}
-                      >
-                        <img
-                          src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
-                          alt={video.videoTitle || 'Video thumbnail'}
-                          style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }}
+                const cardStyle = {
+                  background: 'white', borderRadius: 16, overflow: 'hidden',
+                  boxShadow: 'var(--shadow)', transition: 'transform 0.2s', cursor: 'pointer',
+                };
+
+                // ── Cloudinary video ──
+                if (isCloudinary) {
+                  return (
+                    <div key={video.id} style={cardStyle}
+                      onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
+                      onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                    >
+                      {activeVideo === video.id ? (
+                        <video
+                          src={url}
+                          controls
+                          autoPlay
+                          style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block', background: '#000' }}
                         />
-                        <div
-                          style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: 'rgba(0,0,0,0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
+                      ) : (
+                        <div style={{ position: 'relative', cursor: 'pointer', height: 220, background: '#0f172a' }}
+                          onClick={() => setActiveVideo(video.id)}
                         >
-                          <div
-                            style={{
-                              width: 56,
-                              height: 56,
-                              background: 'rgba(255,255,255,0.9)',
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--deep)">
-                              <polygon points="5,3 19,12 5,21" />
-                            </svg>
-                          </div>
+                          <video
+                            src={`${url}#t=0.5`}
+                            muted
+                            preload="metadata"
+                            style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }}
+                          />
+                          {playButton}
+                          <span style={{
+                            position: 'absolute', top: 10, left: 10,
+                            background: 'rgba(99,102,241,0.9)', color: 'white',
+                            fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em',
+                            padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase',
+                          }}>Cloudinary</span>
                         </div>
-                      </div>
-                    )}
-                    <div style={{ padding: '16px 20px 20px' }}>
-                      <h3
-                        style={{
-                          fontFamily: 'Cormorant Garamond, serif',
-                          fontSize: '1.2rem',
-                          marginBottom: 6,
-                          color: 'var(--deep)',
-                        }}
-                      >
-                        {video.videoTitle || 'Untitled Video'}
-                      </h3>
-                      {video.videoDescription && (
-                        <p style={{ fontSize: '0.9rem', color: 'var(--muted)', lineHeight: 1.5 }}>
-                          {video.videoDescription}
-                        </p>
                       )}
+                      {cardInfo}
                     </div>
+                  );
+                }
+
+                // ── YouTube video ──
+                if (youtubeId) {
+                  return (
+                    <div key={video.id} style={cardStyle}
+                      onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
+                      onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                    >
+                      {activeVideo === video.id ? (
+                        <iframe
+                          width="100%" height="220"
+                          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+                          title={video.videoTitle || 'Video'}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setActiveVideo(video.id)}>
+                          <img
+                            src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+                            alt={video.videoTitle || 'Video thumbnail'}
+                            style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }}
+                          />
+                          {playButton}
+                        </div>
+                      )}
+                      {cardInfo}
+                    </div>
+                  );
+                }
+
+                // ── Unknown / broken URL ──
+                return (
+                  <div key={video.id} style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow)', border: '1px dashed #e2e8f0' }}>
+                    <div style={{ height: 220, background: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#94a3b8', fontSize: '0.85rem', padding: '0 20px', textAlign: 'center' }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="4"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+                      <span>Could not load video</span>
+                      {url && <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', fontSize: '0.78rem', wordBreak: 'break-all' }}>Open link ↗</a>}
+                    </div>
+                    {cardInfo}
                   </div>
                 );
               })}

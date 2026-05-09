@@ -6,10 +6,76 @@ import {
   submitVideo,
   updateVideo,
   deleteVideo,
+  BASE_URL,
   type Submission,
   type VideoPayload,
   type UpdateVideoPayload,
 } from '../../lib/api';
+
+const CLOUDINARY_CLOUD = 'ducnwiact';
+const CLOUDINARY_PRESET = 'oyaib_photos';
+
+async function uploadToCloudinary(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('upload_preset', CLOUDINARY_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) throw new Error('Cloudinary upload failed');
+  const data = await res.json();
+  return data.secure_url as string;
+}
+
+async function uploadVideoToCloudinary(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('upload_preset', CLOUDINARY_PRESET);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText).secure_url);
+      } else {
+        reject(new Error('Cloudinary video upload failed'));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(form);
+  });
+}
+
+async function saveFieldPhoto(payload: { src: string; caption: string }, jwt: string) {
+  const res = await fetch(`${BASE_URL}/field-photos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to save photo');
+  return res.json();
+}
+
+async function deleteFieldPhoto(id: string, jwt: string) {
+  const res = await fetch(`${BASE_URL}/field-photos/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${jwt}` },
+  });
+  if (!res.ok) throw new Error('Failed to delete photo');
+}
+
+async function getFieldPhotos(): Promise<FieldPhoto[]> {
+  const res = await fetch(`${BASE_URL}/field-photos`, { cache: 'no-store' });
+  if (!res.ok) return [];
+  return res.json();
+}
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -116,6 +182,13 @@ export default function DashboardPage() {
 
   const [videoForm, setVideoForm] = useState({ fullName: '', email: '', youtubeUrl: '', title: '', description: '' });
   const [uploading, setUploading] = useState(false);
+  // Cloudinary video upload
+  const [videoUploadMode, setVideoUploadMode] = useState<'youtube' | 'file'>('youtube');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoFilePreview, setVideoFilePreview] = useState<string | null>(null);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoDragging, setVideoDragging] = useState(false);
+  const videoFileRef = useRef<HTMLInputElement>(null);
 
   const [editingVideo, setEditingVideo] = useState<Submission | null>(null);
   const [editForm, setEditForm] = useState({ fullName: '', email: '', youtubeUrl: '', title: '', description: '' });
@@ -134,7 +207,6 @@ export default function DashboardPage() {
   // ── Photos from the Field (no backend — stored in localStorage) ──
   type FieldPhoto = { id: string; src: string; caption: string; addedAt: string };
   const [fieldPhotos, setFieldPhotos] = useState<FieldPhoto[]>([]);
-  const [fieldPreviews, setFieldPreviews] = useState<{ src: string; caption: string }[]>([]);
   const [fieldSaving, setFieldSaving] = useState(false);
   const [fieldDragging, setFieldDragging] = useState(false);
   const [deletingFieldId, setDeletingFieldId] = useState<string | null>(null);
@@ -152,11 +224,8 @@ export default function DashboardPage() {
       const saved = localStorage.getItem('oyaib_photo_of_month');
       if (saved) setPhotoOfMonth(JSON.parse(saved));
     } catch {}
-    // Load field photos
-    try {
-      const savedField = localStorage.getItem('oyaib_field_photos');
-      if (savedField) setFieldPhotos(JSON.parse(savedField));
-    } catch {}
+    // Load field photos from API
+    getFieldPhotos().then(setFieldPhotos).catch(() => setFieldPhotos([]));
   }, []);
 
   const readFileAsBase64 = (file: File): Promise<string> =>
@@ -218,15 +287,18 @@ export default function DashboardPage() {
   };
 
   // ── Field Photos handlers ──
+  // Store actual File objects for upload, alongside a local preview URL
+  const [fieldFiles, setFieldFiles] = useState<{ file: File; previewUrl: string; caption: string }[]>([]);
+
   const handleFieldFiles = async (files: FileList) => {
-    const results: { src: string; caption: string }[] = [];
+    const results: { file: File; previewUrl: string; caption: string }[] = [];
     for (const file of Array.from(files)) {
       if (!file.type.startsWith('image/')) continue;
       if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} exceeds 8 MB — skipped.`, 'error'); continue; }
-      const src = await readFileAsBase64(file);
-      results.push({ src, caption: '' });
+      const previewUrl = URL.createObjectURL(file);
+      results.push({ file, previewUrl, caption: '' });
     }
-    if (results.length) setFieldPreviews(prev => [...prev, ...results]);
+    if (results.length) setFieldFiles(prev => [...prev, ...results]);
   };
 
   const handleFieldInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,43 +311,48 @@ export default function DashboardPage() {
     if (e.dataTransfer.files?.length) handleFieldFiles(e.dataTransfer.files);
   };
 
-  const handleFieldSave = () => {
-    if (!fieldPreviews.length) return;
+  const handleFieldSave = async () => {
+    if (!fieldFiles.length || !token) return;
     setFieldSaving(true);
-    setTimeout(() => {
-      const newPhotos: FieldPhoto[] = fieldPreviews.map(p => ({
-        id: `fp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        src: p.src,
-        caption: p.caption,
-        addedAt: new Date().toISOString(),
-      }));
-      const updated = [...fieldPhotos, ...newPhotos];
+    let saved = 0;
+    const errors: string[] = [];
+    for (const item of fieldFiles) {
       try {
-        localStorage.setItem('oyaib_field_photos', JSON.stringify(updated));
-        setFieldPhotos(updated);
-        setFieldPreviews([]);
-        showToast(`${newPhotos.length} photo${newPhotos.length > 1 ? 's' : ''} saved!`, 'success');
-      } catch {
-        showToast('Storage full — try fewer or smaller images.', 'error');
+        const cloudUrl = await uploadToCloudinary(item.file);
+        const photo = await saveFieldPhoto({ src: cloudUrl, caption: item.caption }, token);
+        setFieldPhotos(prev => [...prev, photo]);
+        saved++;
+      } catch (e: any) {
+        errors.push(item.file.name);
       }
-      setFieldSaving(false);
-    }, 400);
+    }
+    // Revoke object URLs to free memory
+    fieldFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+    setFieldFiles([]);
+    if (saved > 0) showToast(`${saved} photo${saved > 1 ? 's' : ''} uploaded!`, 'success');
+    if (errors.length) showToast(`Failed: ${errors.join(', ')}`, 'error');
+    setFieldSaving(false);
   };
 
-  const handleFieldPhotoDelete = (id: string) => {
-    const updated = fieldPhotos.filter(p => p.id !== id);
-    localStorage.setItem('oyaib_field_photos', JSON.stringify(updated));
-    setFieldPhotos(updated);
-    setDeletingFieldId(null);
-    showToast('Photo deleted.', 'success');
+  const handleFieldPhotoDelete = async (id: string) => {
+    if (!token) return;
+    try {
+      await deleteFieldPhoto(id, token);
+      setFieldPhotos(prev => prev.filter(p => p.id !== id));
+      setDeletingFieldId(null);
+      showToast('Photo deleted.', 'success');
+    } catch {
+      showToast('Failed to delete photo.', 'error');
+    }
   };
 
   const updatePreviewCaption = (idx: number, caption: string) => {
-    setFieldPreviews(prev => prev.map((p, i) => i === idx ? { ...p, caption } : p));
+    setFieldFiles(prev => prev.map((p, i) => i === idx ? { ...p, caption } : p));
   };
 
   const removePreview = (idx: number) => {
-    setFieldPreviews(prev => prev.filter((_, i) => i !== idx));
+    URL.revokeObjectURL(fieldFiles[idx].previewUrl);
+    setFieldFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
   const loadSubmissions = async (jwt: string) => {
@@ -286,19 +363,48 @@ export default function DashboardPage() {
 
   const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
 
+  const handleVideoFile = (file: File) => {
+    if (!file.type.startsWith('video/')) { showToast('Please select a video file.', 'error'); return; }
+    if (file.size > 200 * 1024 * 1024) { showToast('Video must be under 200 MB.', 'error'); return; }
+    setVideoFile(file);
+    setVideoFilePreview(URL.createObjectURL(file));
+  };
+
+  const handleVideoFileDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setVideoDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleVideoFile(file);
+  };
+
+  const clearVideoFile = () => {
+    if (videoFilePreview) URL.revokeObjectURL(videoFilePreview);
+    setVideoFile(null);
+    setVideoFilePreview(null);
+    setVideoUploadProgress(0);
+    if (videoFileRef.current) videoFileRef.current.value = '';
+  };
+
   const handleVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
     setUploading(true);
+    setVideoUploadProgress(0);
     try {
-      await submitVideo(videoForm as VideoPayload, token);
+      let youtubeUrl = videoForm.youtubeUrl;
+      if (videoUploadMode === 'file') {
+        if (!videoFile) { showToast('Please select a video file.', 'error'); setUploading(false); return; }
+        const cloudUrl = await uploadVideoToCloudinary(videoFile, setVideoUploadProgress);
+        youtubeUrl = cloudUrl; // reuse the youtubeUrl field to store the Cloudinary URL
+      }
+      await submitVideo({ ...videoForm, youtubeUrl } as VideoPayload, token);
       showToast('Video published to gallery!', 'success');
       setVideoForm({ fullName: '', email: '', youtubeUrl: '', title: '', description: '' });
+      clearVideoFile();
       loadSubmissions(token);
       setActiveTab('submissions');
     } catch (err: any) {
       showToast(err.message || 'Failed to upload', 'error');
-    } finally { setUploading(false); }
+    } finally { setUploading(false); setVideoUploadProgress(0); }
   };
 
   const openEditModal = (video: Submission) => {
@@ -790,11 +896,33 @@ export default function DashboardPage() {
           {/* ════ UPLOAD ════ */}
           {activeTab === 'upload' && (
             <div className="page-content" style={{ animation: 'fadeIn 0.4s ease' }}>
-              <div className="card" style={{ maxWidth: 660 }}>
-                <div className="card-title"><span>🎬</span> Publish a YouTube Video</div>
-                <p style={{ color: '#64748b', fontSize: '0.86rem', marginBottom: 22 }}>
+              <div className="card" style={{ maxWidth: 700 }}>
+                <div className="card-title"><span>🎬</span> Publish a Video</div>
+                <p style={{ color: '#64748b', fontSize: '0.86rem', marginBottom: 20 }}>
                   Videos you add here will appear live in the public Gallery immediately.
                 </p>
+
+                {/* ── Mode toggle ── */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 24, background: '#f1f5f9', borderRadius: 12, padding: 5 }}>
+                  {(['youtube', 'file'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => { setVideoUploadMode(mode); clearVideoFile(); setVideoForm(f => ({ ...f, youtubeUrl: '' })); }}
+                      style={{
+                        flex: 1, padding: '9px 0', borderRadius: 9, border: 'none',
+                        fontFamily: 'DM Sans, sans-serif', fontSize: '0.88rem', fontWeight: 600,
+                        cursor: 'pointer', transition: 'all 0.2s',
+                        background: videoUploadMode === mode ? 'white' : 'transparent',
+                        color: videoUploadMode === mode ? '#0f172a' : '#64748b',
+                        boxShadow: videoUploadMode === mode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                      }}
+                    >
+                      {mode === 'youtube' ? '🔗 YouTube URL' : '📁 Upload File'}
+                    </button>
+                  ))}
+                </div>
+
                 <form onSubmit={handleVideoSubmit}>
                   <div className="form-grid">
                     <Field label="Your Name *">
@@ -806,19 +934,93 @@ export default function DashboardPage() {
                     <Field label="Video Title *">
                       <input required value={videoForm.title} onChange={e => setVideoForm({ ...videoForm, title: e.target.value })} placeholder="Enter a descriptive title" />
                     </Field>
-                    <Field label="YouTube URL *">
-                      <input required value={videoForm.youtubeUrl} onChange={e => setVideoForm({ ...videoForm, youtubeUrl: e.target.value })} placeholder="https://youtube.com/watch?v=…" />
-                    </Field>
+
+                    {/* ── YouTube mode ── */}
+                    {videoUploadMode === 'youtube' && (
+                      <Field label="YouTube URL *">
+                        <input required value={videoForm.youtubeUrl} onChange={e => setVideoForm({ ...videoForm, youtubeUrl: e.target.value })} placeholder="https://youtube.com/watch?v=…" />
+                      </Field>
+                    )}
+
+                    {/* ── File upload mode ── */}
+                    {videoUploadMode === 'file' && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <Field label="Video File *">
+                          <div
+                            onClick={() => !videoFile && videoFileRef.current?.click()}
+                            onDragOver={e => { e.preventDefault(); setVideoDragging(true); }}
+                            onDragLeave={() => setVideoDragging(false)}
+                            onDrop={handleVideoFileDrop}
+                            style={{
+                              border: `2px dashed ${videoDragging ? '#6366f1' : '#d1d5db'}`,
+                              borderRadius: 12, background: videoDragging ? '#eef2ff' : '#fafafa',
+                              cursor: videoFile ? 'default' : 'pointer',
+                              padding: videoFile ? '16px' : '36px 20px',
+                              textAlign: 'center', transition: 'all 0.2s',
+                              position: 'relative',
+                            }}
+                          >
+                            {videoFile ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                <div style={{ fontSize: 32 }}>🎬</div>
+                                <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                                  <p style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{videoFile.name}</p>
+                                  <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>{(videoFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                                  {uploading && videoUploadProgress > 0 && (
+                                    <div style={{ marginTop: 8 }}>
+                                      <div style={{ background: '#e2e8f0', borderRadius: 99, height: 6, overflow: 'hidden' }}>
+                                        <div style={{ width: `${videoUploadProgress}%`, height: '100%', background: 'linear-gradient(90deg,#6366f1,#4f46e5)', borderRadius: 99, transition: 'width 0.3s' }} />
+                                      </div>
+                                      <p style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600, marginTop: 4 }}>{videoUploadProgress}% uploaded</p>
+                                    </div>
+                                  )}
+                                </div>
+                                {!uploading && (
+                                  <button
+                                    type="button"
+                                    onClick={e => { e.stopPropagation(); clearVideoFile(); }}
+                                    style={{ background: '#fee2e2', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#be123c', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0 }}
+                                  >
+                                    ✕ Remove
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 40, marginBottom: 10 }}>📁</div>
+                                <p style={{ fontWeight: 600, fontSize: '0.9rem', color: '#64748b', marginBottom: 4 }}>
+                                  {videoDragging ? 'Drop video here!' : 'Click or drag & drop a video file'}
+                                </p>
+                                <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>MP4, MOV, AVI, WEBM · Max 200 MB</p>
+                              </>
+                            )}
+                          </div>
+                          <input
+                            ref={videoFileRef}
+                            type="file"
+                            accept="video/*"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoFile(f); e.target.value = ''; }}
+                            style={{ display: 'none' }}
+                          />
+                        </Field>
+                      </div>
+                    )}
+
                     <div className="form-full">
                       <Field label="Description *">
                         <textarea required rows={4} value={videoForm.description} onChange={e => setVideoForm({ ...videoForm, description: e.target.value })} placeholder="Briefly describe what this video is about…" />
                       </Field>
                     </div>
                   </div>
-                  <div style={{ marginTop: 22 }}>
+                  <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', gap: 14 }}>
                     <button type="submit" disabled={uploading} className="btn-primary">
-                      {uploading ? <><span className="spinner" /> Uploading…</> : <><span>⊕</span> Publish Video</>}
+                      {uploading
+                        ? <><span className="spinner" /> {videoUploadMode === 'file' && videoUploadProgress > 0 ? `Uploading ${videoUploadProgress}%…` : 'Publishing…'}</>
+                        : <><span>⊕</span> Publish Video</>}
                     </button>
+                    {videoUploadMode === 'file' && !videoFile && (
+                      <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>Select a video file above to publish</p>
+                    )}
                   </div>
                 </form>
               </div>
@@ -1051,7 +1253,7 @@ export default function DashboardPage() {
           {activeTab === 'fieldPhotos' && (
             <div className="page-content" style={{ animation: 'fadeIn 0.4s ease' }}>
               <p style={{ color: '#64748b', marginBottom: 24, fontSize: '0.9rem' }}>
-                Upload photos to display in the "Photos from the Field" gallery. Stored in the browser — no backend needed.
+                Upload photos to display in the "Photos from the Field" gallery. Photos are uploaded to Cloudinary and visible to all visitors instantly.
               </p>
 
               {/* ── Upload area ── */}
@@ -1084,16 +1286,16 @@ export default function DashboardPage() {
                 <input ref={fieldFileRef} type="file" accept="image/*" multiple onChange={handleFieldInputChange} style={{ display: 'none' }} />
 
                 {/* Previews */}
-                {fieldPreviews.length > 0 && (
+                {fieldFiles.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
                     <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
-                      {fieldPreviews.length} photo{fieldPreviews.length > 1 ? 's' : ''} ready to save
+                      {fieldFiles.length} photo{fieldFiles.length > 1 ? 's' : ''} ready to save
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
-                      {fieldPreviews.map((p, i) => (
+                      {fieldFiles.map((p, i) => (
                         <div key={i} style={{ background: '#f8fafc', borderRadius: 12, overflow: 'hidden', border: '1px solid #e8ecf0' }}>
                           <div style={{ position: 'relative' }}>
-                            <img src={p.src} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block' }} />
+                            <img src={p.previewUrl} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block' }} />
                             <button
                               onClick={() => removePreview(i)}
                               style={{
@@ -1126,15 +1328,15 @@ export default function DashboardPage() {
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button
                     onClick={handleFieldSave}
-                    disabled={!fieldPreviews.length || fieldSaving}
+                    disabled={!fieldFiles.length || fieldSaving}
                     className="btn-primary"
                     style={{
-                      background: !fieldPreviews.length || fieldSaving ? undefined : 'linear-gradient(135deg,#c8970a,#a67c08)',
+                      background: !fieldFiles.length || fieldSaving ? undefined : 'linear-gradient(135deg,#c8970a,#a67c08)',
                     }}
                   >
-                    {fieldSaving ? <><span className="spinner" /> Saving…</> : <><span>💾</span> Save {fieldPreviews.length > 0 ? `${fieldPreviews.length} ` : ''}Photo{fieldPreviews.length !== 1 ? 's' : ''}</>}
+                    {fieldSaving ? <><span className="spinner" /> Saving…</> : <><span>💾</span> Save {fieldFiles.length > 0 ? `${fieldFiles.length} ` : ''}Photo{fieldFiles.length !== 1 ? 's' : ''}</>}
                   </button>
-                  {fieldPreviews.length > 0 && (
+                  {fieldFiles.length > 0 && (
                     <button onClick={() => setFieldPreviews([])} className="btn-cancel">Clear all</button>
                   )}
                 </div>

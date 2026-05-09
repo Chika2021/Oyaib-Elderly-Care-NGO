@@ -189,3 +189,38 @@ export async function deleteVideo(
     token,
   );
 }
+
+// ─── Field Photos ─────────────────────────────────────────────────────────────
+
+export interface FieldPhoto {
+  id: number;
+  src: string;
+  caption?: string;
+  addedAt: string;
+}
+
+/** GET /field-photos – Fetch all field photos (public) */
+export async function fetchFieldPhotos(): Promise<FieldPhoto[]> {
+  return request<FieldPhoto[]>('/field-photos');
+}
+
+/** POST /field-photos – Upload a field photo URL (admin only) */
+export async function createFieldPhoto(
+  payload: { src: string; caption?: string },
+  token: string,
+): Promise<FieldPhoto> {
+  return request<FieldPhoto>('/field-photos', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, token);
+}
+
+/** DELETE /field-photos/:id – Delete a field photo (admin only) */
+export async function deleteFieldPhoto(
+  id: number,
+  token: string,
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/field-photos/${id}`, {
+    method: 'DELETE',
+  }, token);
+}
