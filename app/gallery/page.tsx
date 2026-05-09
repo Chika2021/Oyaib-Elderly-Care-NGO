@@ -378,6 +378,12 @@ export default function GalleryPage() {
   const [error, setError] = useState('');
   const [activeVideo, setActiveVideo] = useState<number | null>(null);
 
+  // Photo of the Month — read from localStorage (set via admin dashboard)
+  const [photoOfMonth, setPhotoOfMonth] = useState<{ src: string; caption: string; month: string } | null>(null);
+
+  // Photos from the Field — read from localStorage (set via admin dashboard)
+  const [fieldPhotos, setFieldPhotos] = useState<{ src: string; caption: string }[] | null>(null);
+
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatLoading, setChatLoading] = useState(true);
@@ -418,6 +424,19 @@ export default function GalleryPage() {
 
   useEffect(() => { loadVideos(); }, [loadVideos]);
   useEffect(() => { loadMessages(); }, [loadMessages]);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('oyaib_photo_of_month');
+      if (saved) setPhotoOfMonth(JSON.parse(saved));
+    } catch {}
+    try {
+      const savedField = localStorage.getItem('oyaib_field_photos');
+      if (savedField) setFieldPhotos(JSON.parse(savedField));
+      else setFieldPhotos([]);
+    } catch {
+      setFieldPhotos([]);
+    }
+  }, []);
 
   function handleNewMessage(msg: Message) {
     setMessages((prev) => [msg, ...prev]);
@@ -452,66 +471,69 @@ export default function GalleryPage() {
       </section>
 
       {/* ── Photo of the Month ── */}
-      <section style={{ padding: '80px 20px 0', background: 'var(--cream)' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            marginBottom: 40,
-            gap: 14,
-          }}>
-            <span style={{
-              display: 'inline-block',
-              background: 'linear-gradient(135deg, #c8832a, #e0a355)',
-              color: 'white',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              padding: '6px 18px',
-              borderRadius: 100,
-            }}>★ Photo of the Month</span>
-            <h2 style={{
-              fontFamily: 'Cormorant Garamond, serif',
-              fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)',
-              color: 'var(--deep)',
-              fontWeight: 700,
-              margin: 0,
-              lineHeight: 1.2,
-            }}>A Smile That Carries a Lifetime</h2>
-          </div>
-          <div style={{
-            borderRadius: 24,
-            overflow: 'hidden',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-            position: 'relative',
-            maxWidth: 780,
-            margin: '0 auto',
-          }}>
-            <img
-              src="/pic2.jpeg"
-              alt="Photo of the Month – elderly woman smiling in colourful dress"
-              style={{ width: '100%', height: 600, objectFit: 'cover', objectPosition: 'center center', display: 'block' }}
-            />
+      {photoOfMonth && (
+        <section style={{ padding: '80px 20px 0', background: 'var(--cream)' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <div style={{
-              position: 'absolute',
-              bottom: 0, left: 0, right: 0,
-              background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)',
-              padding: '48px 32px 28px',
-              color: 'white',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              marginBottom: 40,
+              gap: 14,
             }}>
-              <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '1.05rem', fontStyle: 'italic', opacity: 0.9, margin: '0 0 6px' }}>
-                "Joy lives in the faces of those we care for."
-              </p>
-              <p style={{ fontSize: '0.78rem', opacity: 0.6, margin: 0, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                May 2026 · OYAIB Elderly Care
-              </p>
+              <span style={{
+                display: 'inline-block',
+                background: 'linear-gradient(135deg, #c8832a, #e0a355)',
+                color: 'white',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                padding: '6px 18px',
+                borderRadius: 100,
+              }}>★ Photo of the Month</span>
+              {photoOfMonth.caption && (
+                <h2 style={{
+                  fontFamily: 'Cormorant Garamond, serif',
+                  fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)',
+                  color: 'var(--deep)',
+                  fontWeight: 700,
+                  margin: 0,
+                  lineHeight: 1.2,
+                }}>{photoOfMonth.caption}</h2>
+              )}
+            </div>
+            <div style={{
+              borderRadius: 24,
+              overflow: 'hidden',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+              position: 'relative',
+              maxWidth: 780,
+              margin: '0 auto',
+            }}>
+              <img
+                src={photoOfMonth.src}
+                alt={photoOfMonth.caption || 'Photo of the Month'}
+                style={{ width: '100%', height: 600, objectFit: 'cover', objectPosition: 'center center', display: 'block' }}
+              />
+              {photoOfMonth.month && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0, left: 0, right: 0,
+                  background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)',
+                  padding: '48px 32px 28px',
+                  color: 'white',
+                }}>
+                  <p style={{ fontSize: '0.78rem', opacity: 0.6, margin: 0, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    {photoOfMonth.month} · OYAIB Elderly Care
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── Photo Grid ── */}
       <section style={{ padding: '64px 20px 0', background: 'var(--cream)' }}>
@@ -523,35 +545,66 @@ export default function GalleryPage() {
             fontWeight: 700,
             marginBottom: 32,
           }}>Photos from the Field</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-            {[
-              { src: '/pic1.jpeg', caption: 'Community outreach — women gathered for elderly care awareness' },
-              { src: '/pic2.jpeg', caption: 'A joyful elder on her way to an OYAIB support visit' },
-            ].map((photo, i) => (
-              <div
-                key={i}
-                style={{
-                  borderRadius: 16,
-                  overflow: 'hidden',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                  transition: 'transform 0.2s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
-                onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
-              >
-                <img
-                  src={photo.src}
-                  alt={photo.caption}
-                  style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }}
-                />
-                <div style={{ background: 'white', padding: '14px 18px 16px' }}>
-                  <p style={{ fontSize: '0.88rem', color: 'var(--muted)', lineHeight: 1.5, margin: 0 }}>
-                    {photo.caption}
-                  </p>
+
+          {/* Loading state */}
+          {fieldPhotos === null && (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted)' }}>
+              Loading photos…
+            </div>
+          )}
+
+          {/* Empty state */}
+          {fieldPhotos !== null && fieldPhotos.length === 0 && (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '56px 20px',
+                background: 'white',
+                borderRadius: 16,
+                border: '1px dashed rgba(0,0,0,0.1)',
+                marginBottom: 32,
+              }}
+            >
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.4" style={{ marginBottom: 14 }}>
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <p style={{ margin: 0, fontSize: '0.98rem', color: 'var(--muted)' }}>
+                Images not uploaded yet.
+              </p>
+            </div>
+          )}
+
+          {/* Photo grid */}
+          {fieldPhotos !== null && fieldPhotos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+              {fieldPhotos.map((photo, i) => (
+                <div
+                  key={i}
+                  style={{
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    transition: 'transform 0.2s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
+                  onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                >
+                  <img
+                    src={photo.src}
+                    alt={photo.caption}
+                    style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }}
+                  />
+                  <div style={{ background: 'white', padding: '14px 18px 16px' }}>
+                    <p style={{ fontSize: '0.88rem', color: 'var(--muted)', lineHeight: 1.5, margin: 0 }}>
+                      {photo.caption}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

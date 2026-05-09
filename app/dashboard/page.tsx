@@ -108,7 +108,7 @@ export default function DashboardPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'submissions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'photo' | 'fieldPhotos' | 'submissions'>('overview');
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -121,6 +121,25 @@ export default function DashboardPage() {
   const [editForm, setEditForm] = useState({ fullName: '', email: '', youtubeUrl: '', title: '', description: '' });
   const [saving, setSaving] = useState(false);
 
+  // ── Photo of the Month (no backend — stored in localStorage as base64) ──
+  const [photoOfMonth, setPhotoOfMonth] = useState<{ src: string; caption: string; month: string } | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [photoMonthLabel, setPhotoMonthLabel] = useState('');
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const photoFileRef = useRef<HTMLInputElement>(null);
+
+  // ── Photos from the Field (no backend — stored in localStorage) ──
+  type FieldPhoto = { id: string; src: string; caption: string; addedAt: string };
+  const [fieldPhotos, setFieldPhotos] = useState<FieldPhoto[]>([]);
+  const [fieldPreviews, setFieldPreviews] = useState<{ src: string; caption: string }[]>([]);
+  const [fieldSaving, setFieldSaving] = useState(false);
+  const [fieldDragging, setFieldDragging] = useState(false);
+  const [deletingFieldId, setDeletingFieldId] = useState<string | null>(null);
+  const fieldFileRef = useRef<HTMLInputElement>(null);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -128,7 +147,136 @@ export default function DashboardPage() {
     if (!savedToken) { router.push('/login'); return; }
     setToken(savedToken);
     loadSubmissions(savedToken);
+    // Load saved photo
+    try {
+      const saved = localStorage.getItem('oyaib_photo_of_month');
+      if (saved) setPhotoOfMonth(JSON.parse(saved));
+    } catch {}
+    // Load field photos
+    try {
+      const savedField = localStorage.getItem('oyaib_field_photos');
+      if (savedField) setFieldPhotos(JSON.parse(savedField));
+    } catch {}
   }, []);
+
+  const readFileAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target!.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handlePhotoFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
+    if (file.size > 8 * 1024 * 1024) { showToast('Image must be under 8 MB.', 'error'); return; }
+    const base64 = await readFileAsBase64(file);
+    setPhotoPreview(base64);
+  };
+
+  const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handlePhotoFile(file);
+  };
+
+  const handlePhotoDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handlePhotoFile(file);
+  };
+
+  const handlePhotoSave = () => {
+    if (!photoPreview) return;
+    setPhotoSaving(true);
+    setTimeout(() => {
+      const data = { src: photoPreview, caption: photoCaption, month: photoMonthLabel };
+      try {
+        localStorage.setItem('oyaib_photo_of_month', JSON.stringify(data));
+        setPhotoOfMonth(data);
+        setPhotoPreview(null);
+        setPhotoCaption('');
+        setPhotoMonthLabel('');
+        if (photoFileRef.current) photoFileRef.current.value = '';
+        showToast('Photo of the Month saved!', 'success');
+      } catch {
+        showToast('Storage full — try a smaller image.', 'error');
+      }
+      setPhotoSaving(false);
+    }, 500);
+  };
+
+  const handlePhotoDelete = () => {
+    localStorage.removeItem('oyaib_photo_of_month');
+    setPhotoOfMonth(null);
+    setConfirmDelete(false);
+    showToast('Photo of the Month removed.', 'success');
+  };
+
+  const handlePhotoClear = () => {
+    setPhotoPreview(null); setPhotoCaption(''); setPhotoMonthLabel('');
+    if (photoFileRef.current) photoFileRef.current.value = '';
+  };
+
+  // ── Field Photos handlers ──
+  const handleFieldFiles = async (files: FileList) => {
+    const results: { src: string; caption: string }[] = [];
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue;
+      if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} exceeds 8 MB — skipped.`, 'error'); continue; }
+      const src = await readFileAsBase64(file);
+      results.push({ src, caption: '' });
+    }
+    if (results.length) setFieldPreviews(prev => [...prev, ...results]);
+  };
+
+  const handleFieldInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) handleFieldFiles(e.target.files);
+    e.target.value = '';
+  };
+
+  const handleFieldDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setFieldDragging(false);
+    if (e.dataTransfer.files?.length) handleFieldFiles(e.dataTransfer.files);
+  };
+
+  const handleFieldSave = () => {
+    if (!fieldPreviews.length) return;
+    setFieldSaving(true);
+    setTimeout(() => {
+      const newPhotos: FieldPhoto[] = fieldPreviews.map(p => ({
+        id: `fp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        src: p.src,
+        caption: p.caption,
+        addedAt: new Date().toISOString(),
+      }));
+      const updated = [...fieldPhotos, ...newPhotos];
+      try {
+        localStorage.setItem('oyaib_field_photos', JSON.stringify(updated));
+        setFieldPhotos(updated);
+        setFieldPreviews([]);
+        showToast(`${newPhotos.length} photo${newPhotos.length > 1 ? 's' : ''} saved!`, 'success');
+      } catch {
+        showToast('Storage full — try fewer or smaller images.', 'error');
+      }
+      setFieldSaving(false);
+    }, 400);
+  };
+
+  const handleFieldPhotoDelete = (id: string) => {
+    const updated = fieldPhotos.filter(p => p.id !== id);
+    localStorage.setItem('oyaib_field_photos', JSON.stringify(updated));
+    setFieldPhotos(updated);
+    setDeletingFieldId(null);
+    showToast('Photo deleted.', 'success');
+  };
+
+  const updatePreviewCaption = (idx: number, caption: string) => {
+    setFieldPreviews(prev => prev.map((p, i) => i === idx ? { ...p, caption } : p));
+  };
+
+  const removePreview = (idx: number) => {
+    setFieldPreviews(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const loadSubmissions = async (jwt: string) => {
     try { const data = await fetchSubmissions(jwt); setSubmissions(data); }
@@ -206,9 +354,11 @@ export default function DashboardPage() {
   });
 
   const navItems = [
-    { id: 'overview' as const,     label: 'Overview',    icon: '◈' },
-    { id: 'upload' as const,       label: 'Upload Video', icon: '⊕' },
-    { id: 'submissions' as const,  label: 'Submissions',  icon: '☰' },
+    { id: 'overview' as const,     label: 'Overview',           icon: '◈' },
+    { id: 'upload' as const,       label: 'Upload Video',       icon: '⊕' },
+    { id: 'photo' as const,        label: 'Photo of Month',     icon: '🖼' },
+    { id: 'fieldPhotos' as const,  label: 'Photos from Field',  icon: '📷' },
+    { id: 'submissions' as const,  label: 'Submissions',        icon: '☰' },
   ];
 
   return (
@@ -228,49 +378,52 @@ export default function DashboardPage() {
         /* ─── Sidebar ─────────────────────────────── */
         .sidebar {
           position: fixed; top: 0; left: 0; bottom: 0; width: 255px;
-          background: #0c1220;
+          background: linear-gradient(180deg, #c8970a 0%, #a67c08 100%);
           display: flex; flex-direction: column;
           z-index: 400;
           transition: transform 0.38s cubic-bezier(.4,0,.2,1);
-          border-right: 1px solid rgba(255,255,255,0.05);
+          border-right: 1px solid rgba(0,0,0,0.12);
+          box-shadow: 2px 0 12px rgba(0,0,0,0.12);
         }
         .sidebar-logo {
           padding: 30px 24px 22px;
-          border-bottom: 1px solid rgba(255,255,255,0.07);
+          border-bottom: 1px solid rgba(0,0,0,0.12);
         }
         .sidebar-logo h2 {
           font-family: 'Syne', sans-serif; font-weight: 800;
           color: white; font-size: 1.3rem; letter-spacing: -0.02em;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
-        .sidebar-logo p { color: #475569; font-size: 0.77rem; margin-top: 3px; }
+        .sidebar-logo p { color: rgba(255,255,255,0.65); font-size: 0.77rem; margin-top: 3px; }
 
         .sidebar-nav { flex: 1; padding: 18px 14px; display: flex; flex-direction: column; gap: 3px; }
 
         .nav-item {
           display: flex; align-items: center; gap: 11px;
           padding: 11px 14px; border-radius: 11px;
-          color: #64748b; font-size: 0.88rem; font-weight: 500;
+          color: rgba(255,255,255,0.75); font-size: 0.88rem; font-weight: 500;
           cursor: pointer; transition: all 0.2s;
           border: none; background: none; width: 100%; text-align: left;
           font-family: 'DM Sans', sans-serif;
         }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+        .nav-item:hover { background: rgba(0,0,0,0.12); color: white; }
         .nav-item.active {
-          background: linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(139,92,246,0.18) 100%);
-          color: #a5b4fc;
-          box-shadow: inset 0 0 0 1px rgba(99,102,241,0.25);
+          background: rgba(0,0,0,0.2);
+          color: white;
+          font-weight: 700;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
         }
         .nav-icon { font-size: 1rem; width: 20px; text-align: center; }
 
-        .sidebar-footer { padding: 18px 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .sidebar-footer { padding: 18px 14px; border-top: 1px solid rgba(0,0,0,0.12); }
         .logout-btn {
           display: flex; align-items: center; gap: 9px; width: 100%;
           padding: 10px 14px; border-radius: 10px;
-          background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.18);
-          color: #fca5a5; font-size: 0.86rem; font-weight: 600;
+          background: rgba(0,0,0,0.15); border: 1px solid rgba(0,0,0,0.2);
+          color: white; font-size: 0.86rem; font-weight: 600;
           cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif;
         }
-        .logout-btn:hover { background: rgba(239,68,68,0.2); color: #fecaca; }
+        .logout-btn:hover { background: rgba(0,0,0,0.28); }
 
         /* ─── Main ─────────────────────────────────── */
         .main-content {
@@ -578,7 +731,7 @@ export default function DashboardPage() {
               </svg>
             </button>
             <span className="topbar-title">
-              {activeTab === 'overview' ? 'Overview' : activeTab === 'upload' ? 'Upload Video' : 'Submissions'}
+              {activeTab === 'overview' ? 'Overview' : activeTab === 'upload' ? 'Upload Video' : activeTab === 'photo' ? 'Photo of the Month' : activeTab === 'fieldPhotos' ? 'Photos from the Field' : 'Submissions'}
             </span>
             <div className="avatar">A</div>
           </header>
@@ -668,6 +821,411 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* ════ PHOTO OF THE MONTH ════ */}
+          {activeTab === 'photo' && (
+            <div className="page-content" style={{ animation: 'fadeIn 0.4s ease' }}>
+              <p style={{ color: '#64748b', marginBottom: 24, fontSize: '0.9rem' }}>
+                Upload a photo to feature as the Photo of the Month. It's stored in the browser and persists across sessions.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, alignItems: 'start' }}>
+
+                {/* ── Upload card ── */}
+                <div className="card">
+                  <div className="card-title">📸 Upload New Photo</div>
+
+                  {/* Drop zone */}
+                  <div
+                    onClick={() => !photoPreview && photoFileRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handlePhotoDrop}
+                    style={{
+                      border: `2px dashed ${isDragging ? '#c8970a' : '#d1d5db'}`,
+                      borderRadius: 14,
+                      background: isDragging ? '#fffbeb' : photoPreview ? '#000' : '#fafafa',
+                      cursor: photoPreview ? 'default' : 'pointer',
+                      overflow: 'hidden',
+                      marginBottom: 18,
+                      transition: 'border-color 0.2s, background 0.2s',
+                      minHeight: 200,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    {photoPreview ? (
+                      <>
+                        <img
+                          src={photoPreview}
+                          alt="Preview"
+                          style={{ width: '100%', maxHeight: 280, objectFit: 'contain', display: 'block' }}
+                        />
+                        <button
+                          onClick={e => { e.stopPropagation(); handlePhotoClear(); }}
+                          style={{
+                            position: 'absolute', top: 8, right: 8,
+                            background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                            width: 28, height: 28, cursor: 'pointer', color: 'white',
+                            fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >✕</button>
+                      </>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '32px 20px', color: '#94a3b8' }}>
+                        <div style={{ fontSize: 40, marginBottom: 10 }}>🖼</div>
+                        <p style={{ fontWeight: 600, fontSize: '0.9rem', color: '#64748b', marginBottom: 4 }}>
+                          {isDragging ? 'Drop it here!' : 'Click or drag & drop a photo'}
+                        </p>
+                        <p style={{ fontSize: '0.78rem' }}>JPG, PNG, WEBP · Max 8 MB</p>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    ref={photoFileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoInputChange}
+                    style={{ display: 'none' }}
+                  />
+
+                  {!photoPreview && (
+                    <button
+                      onClick={() => photoFileRef.current?.click()}
+                      className="btn-cancel"
+                      style={{ width: '100%', textAlign: 'center', marginBottom: 16 }}
+                    >
+                      Browse files
+                    </button>
+                  )}
+
+                  <div style={{ display: 'grid', gap: 14, marginBottom: 20 }}>
+                    <Field label="Month label (e.g. May 2026)">
+                      <input
+                        value={photoMonthLabel}
+                        onChange={e => setPhotoMonthLabel(e.target.value)}
+                        placeholder="May 2026"
+                      />
+                    </Field>
+                    <Field label="Caption (optional)">
+                      <textarea
+                        rows={3}
+                        value={photoCaption}
+                        onChange={e => setPhotoCaption(e.target.value)}
+                        placeholder="A short description of this photo…"
+                      />
+                    </Field>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      onClick={handlePhotoSave}
+                      disabled={!photoPreview || photoSaving}
+                      className="btn-primary"
+                      style={{ flex: 1, justifyContent: 'center',
+                        background: !photoPreview || photoSaving
+                          ? undefined
+                          : 'linear-gradient(135deg,#c8970a,#a67c08)' }}
+                    >
+                      {photoSaving
+                        ? <><span className="spinner" /> Saving…</>
+                        : <><span>💾</span> Save Photo</>}
+                    </button>
+                    {photoPreview && (
+                      <button onClick={handlePhotoClear} className="btn-cancel">Clear</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Current photo card ── */}
+                <div className="card">
+                  <div className="card-title">📅 Current Photo of the Month</div>
+                  {photoOfMonth ? (
+                    <div>
+                      <div style={{
+                        borderRadius: 12, overflow: 'hidden', marginBottom: 16,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                        background: '#000',
+                      }}>
+                        <img
+                          src={photoOfMonth.src}
+                          alt={photoOfMonth.caption || 'Photo of the month'}
+                          style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block' }}
+                        />
+                      </div>
+                      {photoOfMonth.month && (
+                        <span style={{
+                          display: 'inline-block', background: '#fef3c7', color: '#92400e',
+                          borderRadius: 20, padding: '3px 12px', fontSize: '0.78rem',
+                          fontWeight: 700, marginBottom: 10,
+                        }}>
+                          📅 {photoOfMonth.month}
+                        </span>
+                      )}
+                      {photoOfMonth.caption && (
+                        <p style={{ color: '#475569', fontSize: '0.88rem', lineHeight: 1.65, marginBottom: 20 }}>
+                          {photoOfMonth.caption}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                          onClick={() => {
+                            setPhotoPreview(photoOfMonth.src);
+                            setPhotoCaption(photoOfMonth.caption);
+                            setPhotoMonthLabel(photoOfMonth.month);
+                          }}
+                          className="btn-edit"
+                          style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                        >
+                          ✏️ Replace
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(true)}
+                          className="btn-del"
+                          style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                        >
+                          🗑 Delete
+                        </button>
+                      </div>
+
+                      {/* Inline delete confirmation */}
+                      {confirmDelete && (
+                        <div style={{
+                          marginTop: 16,
+                          background: '#fff1f2',
+                          border: '1px solid #fecdd3',
+                          borderRadius: 12,
+                          padding: '16px 18px',
+                          animation: 'slideUp 0.2s ease',
+                        }}>
+                          <p style={{ fontWeight: 600, color: '#be123c', fontSize: '0.9rem', marginBottom: 4 }}>
+                            Delete this photo?
+                          </p>
+                          <p style={{ color: '#9f1239', fontSize: '0.82rem', marginBottom: 14 }}>
+                            This will permanently remove the Photo of the Month. This action cannot be undone.
+                          </p>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              onClick={handlePhotoDelete}
+                              style={{
+                                background: '#be123c', color: 'white', border: 'none',
+                                borderRadius: 8, padding: '8px 18px', fontWeight: 700,
+                                fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                                transition: 'background 0.15s',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#9f1239')}
+                              onMouseLeave={e => (e.currentTarget.style.background = '#be123c')}
+                            >
+                              Yes, delete it
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(false)}
+                              className="btn-cancel"
+                              style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '50px 20px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '3rem', marginBottom: 12 }}>🖼</div>
+                      <p style={{ fontWeight: 600, marginBottom: 6 }}>No photo set yet</p>
+                      <p style={{ fontSize: '0.83rem' }}>Upload one on the left to get started.</p>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ════ PHOTOS FROM THE FIELD ════ */}
+          {activeTab === 'fieldPhotos' && (
+            <div className="page-content" style={{ animation: 'fadeIn 0.4s ease' }}>
+              <p style={{ color: '#64748b', marginBottom: 24, fontSize: '0.9rem' }}>
+                Upload photos to display in the "Photos from the Field" gallery. Stored in the browser — no backend needed.
+              </p>
+
+              {/* ── Upload area ── */}
+              <div className="card" style={{ marginBottom: 28 }}>
+                <div className="card-title">📷 Add New Photos</div>
+
+                {/* Drop zone */}
+                <div
+                  onClick={() => fieldFileRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); setFieldDragging(true); }}
+                  onDragLeave={() => setFieldDragging(false)}
+                  onDrop={handleFieldDrop}
+                  style={{
+                    border: `2px dashed ${fieldDragging ? '#c8970a' : '#d1d5db'}`,
+                    borderRadius: 14,
+                    background: fieldDragging ? '#fffbeb' : '#fafafa',
+                    cursor: 'pointer',
+                    padding: '36px 20px',
+                    textAlign: 'center',
+                    transition: 'border-color 0.2s, background 0.2s',
+                    marginBottom: 20,
+                  }}
+                >
+                  <div style={{ fontSize: 40, marginBottom: 10 }}>📷</div>
+                  <p style={{ fontWeight: 600, fontSize: '0.9rem', color: '#64748b', marginBottom: 4 }}>
+                    {fieldDragging ? 'Drop photos here!' : 'Click or drag & drop photos'}
+                  </p>
+                  <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>JPG, PNG, WEBP · Max 8 MB each · Multiple allowed</p>
+                </div>
+                <input ref={fieldFileRef} type="file" accept="image/*" multiple onChange={handleFieldInputChange} style={{ display: 'none' }} />
+
+                {/* Previews */}
+                {fieldPreviews.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+                      {fieldPreviews.length} photo{fieldPreviews.length > 1 ? 's' : ''} ready to save
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+                      {fieldPreviews.map((p, i) => (
+                        <div key={i} style={{ background: '#f8fafc', borderRadius: 12, overflow: 'hidden', border: '1px solid #e8ecf0' }}>
+                          <div style={{ position: 'relative' }}>
+                            <img src={p.src} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block' }} />
+                            <button
+                              onClick={() => removePreview(i)}
+                              style={{
+                                position: 'absolute', top: 6, right: 6,
+                                background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                                width: 26, height: 26, cursor: 'pointer', color: 'white',
+                                fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}
+                            >✕</button>
+                          </div>
+                          <div style={{ padding: '10px 12px' }}>
+                            <input
+                              value={p.caption}
+                              onChange={e => updatePreviewCaption(i, e.target.value)}
+                              placeholder="Caption (optional)"
+                              style={{
+                                width: '100%', border: '1px solid #e2e8f0', borderRadius: 8,
+                                padding: '7px 10px', fontSize: '0.82rem', background: 'white',
+                                color: '#0f172a', outline: 'none', fontFamily: 'DM Sans, sans-serif',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleFieldSave}
+                    disabled={!fieldPreviews.length || fieldSaving}
+                    className="btn-primary"
+                    style={{
+                      background: !fieldPreviews.length || fieldSaving ? undefined : 'linear-gradient(135deg,#c8970a,#a67c08)',
+                    }}
+                  >
+                    {fieldSaving ? <><span className="spinner" /> Saving…</> : <><span>💾</span> Save {fieldPreviews.length > 0 ? `${fieldPreviews.length} ` : ''}Photo{fieldPreviews.length !== 1 ? 's' : ''}</>}
+                  </button>
+                  {fieldPreviews.length > 0 && (
+                    <button onClick={() => setFieldPreviews([])} className="btn-cancel">Clear all</button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Saved gallery ── */}
+              <div className="card">
+                <div className="card-title" style={{ marginBottom: fieldPhotos.length ? 20 : 0 }}>
+                  🗂 Saved Photos
+                  {fieldPhotos.length > 0 && (
+                    <span style={{ marginLeft: 8, fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8', background: '#f1f5f9', borderRadius: 20, padding: '2px 10px' }}>
+                      {fieldPhotos.length}
+                    </span>
+                  )}
+                </div>
+
+                {fieldPhotos.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📭</div>
+                    <p style={{ fontWeight: 600, marginBottom: 4 }}>No photos saved yet</p>
+                    <p style={{ fontSize: '0.83rem' }}>Upload some above to get started.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                    {fieldPhotos.map(photo => (
+                      <div key={photo.id} style={{
+                        background: '#f8fafc', borderRadius: 14, overflow: 'hidden',
+                        border: '1px solid #e8ecf0',
+                        transition: 'box-shadow 0.2s',
+                      }}
+                        onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.1)')}
+                        onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                      >
+                        <img
+                          src={photo.src}
+                          alt={photo.caption || 'Field photo'}
+                          style={{ width: '100%', height: 170, objectFit: 'cover', display: 'block' }}
+                        />
+                        <div style={{ padding: '12px 14px' }}>
+                          {photo.caption && (
+                            <p style={{ fontSize: '0.83rem', color: '#475569', lineHeight: 1.5, marginBottom: 10 }}>{photo.caption}</p>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>
+                              {new Date(photo.addedAt).toLocaleDateString()}
+                            </span>
+                            <button
+                              onClick={() => setDeletingFieldId(photo.id)}
+                              className="btn-del"
+                              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                            >
+                              🗑 Delete
+                            </button>
+                          </div>
+
+                          {/* Inline delete confirmation */}
+                          {deletingFieldId === photo.id && (
+                            <div style={{
+                              marginTop: 10, background: '#fff1f2',
+                              border: '1px solid #fecdd3', borderRadius: 10,
+                              padding: '12px 14px', animation: 'slideUp 0.2s ease',
+                            }}>
+                              <p style={{ fontWeight: 600, color: '#be123c', fontSize: '0.82rem', marginBottom: 8 }}>
+                                Delete this photo?
+                              </p>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                  onClick={() => handleFieldPhotoDelete(photo.id)}
+                                  style={{
+                                    background: '#be123c', color: 'white', border: 'none',
+                                    borderRadius: 7, padding: '6px 14px', fontWeight: 700,
+                                    fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                                  }}
+                                >
+                                  Yes, delete
+                                </button>
+                                <button
+                                  onClick={() => setDeletingFieldId(null)}
+                                  className="btn-cancel"
+                                  style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

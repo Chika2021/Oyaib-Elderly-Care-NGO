@@ -45,7 +45,7 @@ const faqs = [
   { q: "How do I request care services for an elderly family member?", a: "Contact us via phone or email with details of the elder's location and care needs. Our team will assess and connect you with the appropriate program within 48 hours." },
   { q: "Is OYAIB's care service free of charge?", a: "Most of our programs are provided free or at highly subsidised rates for low-income beneficiaries. We work with donors to ensure no elder is denied care due to inability to pay." },
   { q: "How can I volunteer with OYAIB?", a: "Visit our Get Involved page or send us a message here. We welcome volunteers with skills in healthcare, social work, administration, and community outreach." },
-  { q: "Is OYAIB a registered NGO?", a: "Yes, OYAIB Elderly Care is a registered non-governmental organisation operating across Nigeria with a mission to dignify and support the elderly." },
+  { q: "Is OYAIB a registered NGO?", a: "Yes, OYAIB Elderly Care is a registered non-governmental organisation operating across the world with a mission to dignify and support the elderly." },
   { q: "How can my company partner with OYAIB?", a: 'We welcome CSR partnerships, sponsorships and employee volunteering programmes. Select "Corporate Partnership" in the form and our team will reach out within 2 business days.' },
 ];
 
@@ -301,7 +301,7 @@ export default function ContactPage() {
       <section ref={ctaRef.ref} style={{ padding: 'clamp(60px,10vw,100px) clamp(20px,5vw,32px)', background: 'var(--amber)', textAlign: 'center' }}>
         <div style={{ maxWidth: 580, margin: '0 auto', opacity: ctaRef.inView ? 1 : 0, transform: ctaRef.inView ? 'translateY(0)' : 'translateY(24px)', transition: 'all 0.8s ease' }}>
           <h2 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 'clamp(2rem,4vw,3.2rem)', fontWeight: 700, color: 'white', marginBottom: 18 }}>Together We Can Do More</h2>
-          <p style={{ color: 'rgba(255,255,255,0.82)', fontSize: '1rem', lineHeight: 1.8, marginBottom: 36 }}>Whether you donate, volunteer or simply reach out — every action brings dignity to a Nigerian elder's life.</p>
+          <p style={{ color: 'rgba(255,255,255,0.82)', fontSize: '1rem', lineHeight: 1.8, marginBottom: 36 }}>Whether you donate, volunteer or simply reach out — every action brings dignity to our elder's life.</p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href="/donate" className="btn-white"><Heart size={15} fill="var(--amber)" color="var(--amber)" /> Donate Now</Link>
             <Link href="/get-involved" className="btn-outline" style={{ borderColor: 'rgba(255,255,255,0.5)', color: 'white' }}>Get Involved <ArrowRight size={15} /></Link>

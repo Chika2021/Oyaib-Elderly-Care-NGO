@@ -10,7 +10,7 @@ import { submitJoinTeam, type JoinTeamPayload } from '../../lib/api'; // 👈 AP
 const ways = [
   { icon: Heart, title: 'Volunteer', color: '#c8832a', desc: 'Spend time directly with elderly beneficiaries as a caregiver, companion or program assistant.', cta: 'Become a Volunteer' },
   { icon: Building, title: 'Corporate Partnership', color: '#6b7c5e', desc: 'Align your organisation with elder care — through CSR funding, employee volunteering or in-kind support.', cta: 'Partner With Us' },
-  { icon: Megaphone, title: 'Advocacy', color: '#a0522d', desc: 'Use your voice and platform to raise awareness about elder welfare and drive policy change in Nigeria.', cta: 'Become an Advocate' },
+  { icon: Megaphone, title: 'Advocacy', color: '#a0522d', desc: 'Use your voice and platform to raise awareness about elder welfare and drive policy change across the world.', cta: 'Become an Advocate' },
   { icon: Users, title: 'Community Mobiliser', color: '#c8832a', desc: 'Help us identify elders in need in your community and connect them with our care programs.', cta: 'Mobilise Your Community' },
 ];
 
@@ -72,7 +72,7 @@ export default function GetInvolvedPage() {
             Be the Difference<br /><span style={{ background: 'linear-gradient(90deg,#c8832a,#e0a355)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>an Elder Needs</span>
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 'clamp(1rem,2vw,1.1rem)', lineHeight: 1.9, animation: 'fadeUp 0.7s ease 0.35s both' }}>
-            Whether you have time, skills or resources — there is a meaningful way for you to contribute to the care of Nigeria's elderly citizens.
+            Whether you have time, skills or resources — there is a meaningful way for you to contribute to the care of our elderly population.
           </p>
         </div>
       </section>

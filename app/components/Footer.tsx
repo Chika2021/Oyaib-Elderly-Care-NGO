@@ -15,11 +15,11 @@ export default function Footer() {
               </div>
               <div>
                 <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>OYAIB Elderly Care</div>
-                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '2px', textTransform: 'uppercase' }}>NGO · Nigeria</div>
+                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '2px', textTransform: 'uppercase' }}>NGO · International</div>
               </div>
             </div>
             <p style={{ fontSize: '0.875rem', lineHeight: 1.8, color: 'rgba(255,255,255,0.5)', maxWidth: 270 }}>
-              Dedicated to the dignity, welfare and wellbeing of elderly citizens across Nigeria. Because honouring our elders is honouring our future.
+              Dedicated to the dignity, welfare and wellbeing of elderly citizens across the world. Because honouring our elders is honouring our future.
             </p>
             <div style={{ marginTop: 22, padding: '14px 18px', background: 'rgba(200,131,42,0.1)', borderRadius: 12, border: '1px solid rgba(200,131,42,0.2)' }}>
               <p style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic', color: 'var(--amber-lt)', fontSize: '0.95rem', margin: 0 }}>
@@ -76,7 +76,7 @@ export default function Footer() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <MapPin size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
-                <span style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>Nigeria</span>
+                <span style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>International</span>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <Phone size={15} color="var(--amber)" style={{ flexShrink: 0 }} />
@@ -99,7 +99,7 @@ export default function Footer() {
             © {new Date().getFullYear()} OYAIB Elderly Care. All rights reserved.
           </p>
           <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', margin: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
-            Made with <Heart size={12} fill="var(--amber)" color="var(--amber)" /> for Nigeria&apos;s elders
+            Made with <Heart size={12} fill="var(--amber)" color="var(--amber)" /> for Our&apos;s elders
           </p>
         </div>
       </div>

@@ -70,7 +70,7 @@ export default function DonatePage() {
               Thank You, {donorName || 'Friend'}!
             </h1>
             <p style={{ color: 'var(--text-mid)', fontSize: '1rem', lineHeight: 1.8, marginBottom: 36, animation: 'fadeUp 0.6s ease 0.2s both' }}>
-              Your donation of <strong style={{ color: 'var(--amber)' }}>₦{(finalAmount || 0).toLocaleString()}</strong> has been received. Our team will confirm your gift via email within 24 hours. You are helping restore dignity to Nigeria's elders.
+              Your donation of <strong style={{ color: 'var(--amber)' }}>₦{(finalAmount || 0).toLocaleString()}</strong> has been received. Our team will confirm your gift via email within 24 hours. You are helping restore dignity to our elders.
             </p>
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', animation: 'fadeUp 0.6s ease 0.3s both' }}>
               <Link href="/" className="btn-primary">Back to Home</Link>
@@ -99,7 +99,7 @@ export default function DonatePage() {
             Give an Elder<br /><span style={{ background: 'linear-gradient(90deg,#c8832a,#e0a355)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Their Dignity Back</span>
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 'clamp(1rem,2vw,1.1rem)', lineHeight: 1.9, animation: 'fadeUp 0.7s ease 0.35s both' }}>
-            Every naira given directly funds care, food, medicine and social support for Nigeria's most vulnerable seniors.
+            Every naira given directly funds care, food, medicine and social support for our most vulnerable seniors.
           </p>
         </div>
       </section>

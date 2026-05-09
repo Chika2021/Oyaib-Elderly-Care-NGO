@@ -219,7 +219,7 @@ export default function HomePage() {
             {/* Tag */}
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(200,131,42,0.14)', border: '1px solid rgba(200,131,42,0.3)', borderRadius: 50, padding: '5px 14px', marginBottom: 28, opacity: heroLoaded ? 1 : 0, transform: heroLoaded ? 'translateY(0)' : 'translateY(-16px)', transition: 'all 0.6s ease 0.1s' }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--amber)', animation: 'pulse 2s infinite' }} />
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '1.8px', textTransform: 'uppercase', color: 'var(--amber-lt)' }}>Nigerian NGO · Est. 2020</span>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '1.8px', textTransform: 'uppercase', color: 'var(--amber-lt)' }}>International NGO · Est. 2020</span>
             </div>
 
             {/* Headline */}
@@ -240,7 +240,7 @@ export default function HomePage() {
 
             {/* Sub */}
             <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 'clamp(1rem,2.2vw,1.12rem)', lineHeight: 1.85, maxWidth: 520, marginBottom: 44, opacity: heroLoaded ? 1 : 0, transform: heroLoaded ? 'translateX(0)' : 'translateX(-20px)', filter: heroLoaded ? 'blur(0)' : 'blur(6px)', transition: 'all 0.9s ease 0.65s' }}>
-              OYAIB Elderly Care is a Nigerian NGO providing compassionate care, medical support and social welfare to our senior citizens — because every elder deserves dignity.
+              OYAIB Elderly Care is an International NGO providing compassionate care, medical support and social welfare to our senior citizens — because every elder deserves dignity.
             </p>
 
             {/* CTAs */}
@@ -268,7 +268,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.92rem', lineHeight: 1.8 }}>
-                To restore dignity, provide essential care and build a community of love and support for Nigeria's elderly population — one life at a time.
+                To restore dignity, provide essential care and build a community of love and support for our elderly population — one life at a time.
               </p>
             </div>
 
@@ -372,7 +372,7 @@ export default function HomePage() {
           <div>
             <div className="section-tag"><Heart size={11} fill="var(--amber)" /> Why It Matters</div>
             <h2 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 'clamp(1.9rem,4vw,3rem)', fontWeight: 700, color: 'var(--deep)', lineHeight: 1.2, marginBottom: 24 }}>
-              Nigeria's Elderly Crisis<br />Demands Action
+              Our Elderly Crisis<br />Demands Action
             </h2>
             {[
               { n: '8M+', text: 'Nigerians over 60 lack adequate care or support systems.' },

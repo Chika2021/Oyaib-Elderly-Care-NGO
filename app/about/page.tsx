@@ -117,7 +117,7 @@ function FloatingOrb({ style }: { style: React.CSSProperties }) {
 }
 
 const team = [
-  { name: 'Bleituma Ogbi', role: 'Founder & Executive Director', bio: 'A passionate advocate for elder rights with over a decade of social work experience across Nigeria.' },
+  { name: 'Bleituma Ogbi', role: 'Founder & Executive Director', bio: 'A passionate advocate for elder rights with over a decade of social work experience across the World.' },
   { name: 'Ogbi Tuma', role: 'Programs Director', bio: 'Oversees all care programs and ensures quality delivery of services to elderly beneficiaries.' },
   { name: 'Dr. Amaka Obi', role: 'Medical Coordinator', bio: 'Board-certified physician providing medical oversight and health programming for the organization.' },
   { name: 'James Etuk', role: 'Community Outreach Lead', bio: 'Coordinates volunteer networks and community partnerships across all active states.' },
@@ -326,7 +326,7 @@ export default function AboutPage() {
             transform: heroLoaded ? 'translateY(0)' : 'translateY(30px)',
             transition: 'opacity 0.8s ease 0.35s, transform 0.9s cubic-bezier(0.16,1,0.3,1) 0.35s',
           }}>
-            OYAIB Elderly Care was born from a simple but powerful conviction — that Nigeria's senior citizens deserve care, respect and a life of dignity, regardless of their economic circumstances.
+            OYAIB Elderly Care was born from a simple but powerful conviction — that our senior citizens deserve care, respect and a life of dignity, regardless of their economic circumstances.
           </p>
 
           {/* Decorative animated line */}
@@ -384,8 +384,8 @@ export default function AboutPage() {
       <section ref={missionRef.ref} style={{ padding: 'clamp(60px,10vw,120px) clamp(20px,5vw,32px)', background: 'var(--cream)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(300px,100%),1fr))', gap: 'clamp(24px,4vw,40px)' }}>
           {[
-            { icon: Eye, title: 'Our Vision', color: 'var(--amber)', text: 'A Nigeria where no elderly citizen is neglected, forgotten or left to suffer alone — where every elder lives out their final years with dignity, love and full access to care.' },
-            { icon: Target, title: 'Our Mission', color: 'var(--sage)', text: "To provide holistic care — physical, emotional, medical and social — to Nigeria's elderly population through community-driven programs, partnerships and compassionate volunteerism." },
+            { icon: Eye, title: 'Our Vision', color: 'var(--amber)', text: 'A World where no elderly citizen is neglected, forgotten or left to suffer alone — where every elder lives out their final years with dignity, love and full access to care.' },
+            { icon: Target, title: 'Our Mission', color: 'var(--sage)', text: "To provide holistic care — physical, emotional, medical and social — to our elderly population through community-driven programs, partnerships and compassionate volunteerism." },
             { icon: Heart, title: 'Our Values', color: '#a0522d', text: 'Compassion · Dignity · Community · Integrity · Impact. These are not just words — they are the daily commitments that guide every decision we make and every life we touch.' },
           ].map((item, i) => (
             <div key={i} style={{
