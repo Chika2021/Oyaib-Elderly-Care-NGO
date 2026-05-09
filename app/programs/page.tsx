@@ -1,9 +1,20 @@
 'use client';
 import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react';
 import { useInView } from '../components/useInView';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { Home, Stethoscope, Users, BookOpen, Apple, Brain, Heart, ArrowRight, CheckCircle } from 'lucide-react';
+import { Home, Stethoscope, Users, BookOpen, Apple, Brain, Heart, ArrowRight, CheckCircle, MessageCircle, Send, ChevronDown, ChevronUp } from 'lucide-react';
+import { BASE_URL } from '../../lib/api';
+
+interface Message {
+  id: number;
+  authorName: string;
+  content: string;
+  parentId: number | null;
+  createdAt: string;
+  replies?: Message[];
+}
 
 const programs = [
   {
@@ -47,7 +58,95 @@ const programs = [
 export default function ProgramsPage() {
   const heroRef = useInView(0.1);
   const programsRef = useInView(0.05);
+  const chatRef = useInView(0.1);
   const ctaRef = useInView(0.2);
+
+  // ── Chat state ──
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatLoading, setChatLoading] = useState(true);
+  const [name, setName] = useState('');
+  const [content, setContent] = useState('');
+  const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [expandedReplies, setExpandedReplies] = useState<Set<number>>(new Set());
+  const [replyName, setReplyName] = useState('');
+  const [replyContent, setReplyContent] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const loadMessages = async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/message?_=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data: Message[] = await res.json();
+        setMessages(data);
+      }
+    } catch (e) {
+      console.error('Failed to load messages', e);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => { loadMessages(); }, []);
+
+  const sendMessage = async () => {
+    if (!content.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${BASE_URL}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorName: name.trim() || 'Anonymous', content: content.trim() }),
+      });
+      if (res.ok) { setContent(''); setName(''); await loadMessages(); }
+    } catch (e) { console.error(e); }
+    setSending(false);
+  };
+
+  const sendReply = async (parentId: number) => {
+    if (!replyContent.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${BASE_URL}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorName: replyName.trim() || 'Anonymous', content: replyContent.trim(), parentId }),
+      });
+      if (res.ok) {
+        setReplyTo(null); setReplyContent(''); setReplyName('');
+        setExpandedReplies(prev => new Set([...prev, parentId]));
+        await loadMessages();
+      }
+    } catch (e) { console.error(e); }
+    setSending(false);
+  };
+
+  const loadReplies = async (parentId: number): Promise<Message[]> => {
+    try {
+      const res = await fetch(`${BASE_URL}/message?parentId=${parentId}&_=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) return res.json();
+    } catch (e) { console.error(e); }
+    return [];
+  };
+
+  const toggleReplies = async (msg: Message) => {
+    const next = new Set(expandedReplies);
+    if (next.has(msg.id)) {
+      next.delete(msg.id);
+    } else {
+      const replies = await loadReplies(msg.id);
+      msg.replies = replies;
+      next.add(msg.id);
+    }
+    setExpandedReplies(next);
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, replies: msg.replies } : m));
+  };
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) + ' · ' +
+      d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <main>
@@ -103,6 +202,113 @@ export default function ProgramsPage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ══ COMMUNITY CHAT ══ */}
+      <section ref={chatRef.ref} style={{ padding: 'clamp(60px,10vw,100px) clamp(20px,5vw,32px)', background: 'white' }}>
+        <div style={{ maxWidth: 780, margin: '0 auto', opacity: chatRef.inView ? 1 : 0, transform: chatRef.inView ? 'translateY(0)' : 'translateY(40px)', transition: 'all 0.7s ease' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: '#c8832a14', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <MessageCircle size={22} color="#c8832a" />
+            </div>
+            <div>
+              <h2 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 'clamp(1.6rem,3vw,2.4rem)', fontWeight: 700, color: 'var(--deep)', margin: 0 }}>Community Chat</h2>
+              <p style={{ color: 'var(--text-mid, #666)', fontSize: '0.88rem', margin: 0 }}>Share thoughts, ask questions, encourage one another</p>
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border, #e5e7eb)', margin: '24px 0' }} />
+
+          {/* Messages */}
+          <div style={{ minHeight: 200, maxHeight: 480, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24, paddingRight: 4 }}>
+            {chatLoading && <p style={{ color: 'var(--text-lt, #999)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>Loading messages…</p>}
+            {!chatLoading && messages.length === 0 && (
+              <p style={{ color: 'var(--text-lt, #999)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>No messages yet. Be the first to say hello! 👋</p>
+            )}
+            {messages.map(msg => (
+              <div key={msg.id} style={{ background: 'var(--cream, #faf8f4)', borderRadius: 14, padding: '16px 18px', border: '1px solid var(--border, #e5e7eb)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#c8832a,#e0a355)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: 700 }}>{(msg.authorName || 'A')[0].toUpperCase()}</span>
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--deep)' }}>{msg.authorName || 'Anonymous'}</span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-lt, #999)', whiteSpace: 'nowrap' }}>{formatTime(msg.createdAt)}</span>
+                </div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-mid, #444)', lineHeight: 1.7, margin: '0 0 12px' }}>{msg.content}</p>
+
+                {/* Reply controls */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <button onClick={() => setReplyTo(replyTo?.id === msg.id ? null : msg)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#c8832a', fontWeight: 600, padding: 0 }}>
+                    {replyTo?.id === msg.id ? 'Cancel' : '↩ Reply'}
+                  </button>
+                  <button onClick={() => toggleReplies(msg)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text-lt, #999)', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {expandedReplies.has(msg.id) ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {expandedReplies.has(msg.id) ? 'Hide replies' : 'View replies'}
+                  </button>
+                </div>
+
+                {/* Inline reply form */}
+                {replyTo?.id === msg.id && (
+                  <div style={{ marginTop: 14, padding: '14px 16px', background: 'white', borderRadius: 10, border: '1px solid var(--border, #e5e7eb)' }}>
+                    <input value={replyName} onChange={e => setReplyName(e.target.value)} placeholder="Your name (optional)"
+                      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '0.85rem', color: 'var(--deep)', marginBottom: 8, outline: 'none' }} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input value={replyContent} onChange={e => setReplyContent(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && sendReply(msg.id)}
+                        placeholder="Write a reply…"
+                        style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '0.85rem', color: 'var(--deep)', outline: 'none' }} />
+                      <button onClick={() => sendReply(msg.id)} disabled={sending || !replyContent.trim()}
+                        style={{ background: '#c8832a', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: sending ? 0.6 : 1 }}>
+                        <Send size={13} color="white" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Replies */}
+                {expandedReplies.has(msg.id) && msg.replies && (
+                  <div style={{ marginTop: 12, paddingLeft: 16, borderLeft: '2px solid #c8832a33', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {msg.replies.length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--text-lt, #999)' }}>No replies yet.</p>}
+                    {msg.replies.map(r => (
+                      <div key={r.id} style={{ background: 'white', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border, #e5e7eb)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--deep)' }}>{r.authorName || 'Anonymous'}</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-lt, #999)' }}>{formatTime(r.createdAt)}</span>
+                        </div>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-mid, #444)', lineHeight: 1.6, margin: 0 }}>{r.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* New message form */}
+          <div style={{ background: 'var(--cream, #faf8f4)', border: '1px solid var(--border, #e5e7eb)', borderRadius: 16, padding: '20px 20px 16px' }}>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name (optional)"
+              style={{ width: '100%', background: 'white', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '10px 14px', fontSize: '0.88rem', color: 'var(--deep)', marginBottom: 10, outline: 'none', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              <textarea value={content} onChange={e => setContent(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                placeholder="Share a thought, ask a question, or encourage someone…"
+                rows={3}
+                style={{ flex: 1, background: 'white', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '10px 14px', fontSize: '0.88rem', color: 'var(--deep)', resize: 'none', outline: 'none', lineHeight: 1.6, fontFamily: 'inherit' }} />
+              <button onClick={sendMessage} disabled={sending || !content.trim()}
+                style={{ background: sending || !content.trim() ? '#ccc' : 'linear-gradient(135deg,#c8832a,#e0a355)', border: 'none', borderRadius: 12, padding: '14px 18px', cursor: sending || !content.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, color: 'white', fontWeight: 600, fontSize: '0.88rem', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
+                <Send size={15} /> {sending ? 'Sending…' : 'Post'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-lt, #999)', margin: '10px 0 0' }}>Press Enter to post · Shift+Enter for new line</p>
+          </div>
         </div>
       </section>
 
