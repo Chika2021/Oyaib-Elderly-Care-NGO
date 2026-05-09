@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   fetchSubmissions,
@@ -71,13 +71,14 @@ async function deleteFieldPhoto(id: string, jwt: string) {
   if (!res.ok) throw new Error('Failed to delete photo');
 }
 
+// FieldPhoto type used by getFieldPhotos and dashboard state
+interface FieldPhoto { id: string; src: string; caption: string; addedAt: string; }
+
 async function getFieldPhotos(): Promise<FieldPhoto[]> {
   const res = await fetch(`${BASE_URL}/field-photos`, { cache: 'no-store' });
   if (!res.ok) return [];
   return res.json();
 }
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,8 +96,9 @@ function typeMeta(t: string) {
 function AnimatedCount({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
   useEffect(() => {
+    if (value === 0) { setDisplay(0); return; }
     let start = 0;
-    const step = Math.ceil(value / 30);
+    const step = Math.max(1, Math.ceil(value / 30));
     const timer = setInterval(() => {
       start += step;
       if (start >= value) { setDisplay(value); clearInterval(timer); }
@@ -141,7 +143,7 @@ function StatCard({ icon, label, value, color, delay }: {
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ msg, type, onClose }: { msg: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
   return (
     <div style={{
       position: 'fixed', bottom: 28, right: 28, zIndex: 9999,
@@ -204,8 +206,7 @@ export default function DashboardPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const photoFileRef = useRef<HTMLInputElement>(null);
 
-  // ── Photos from the Field (no backend — stored in localStorage) ──
-  type FieldPhoto = { id: string; src: string; caption: string; addedAt: string };
+  // ── Photos from the Field — loaded from API ──
   const [fieldPhotos, setFieldPhotos] = useState<FieldPhoto[]>([]);
   const [fieldSaving, setFieldSaving] = useState(false);
   const [fieldDragging, setFieldDragging] = useState(false);
@@ -213,6 +214,12 @@ export default function DashboardPage() {
   const fieldFileRef = useRef<HTMLInputElement>(null);
 
   const router = useRouter();
+
+  const loadSubmissions = useCallback(async (jwt: string) => {
+    try { const data = await fetchSubmissions(jwt); setSubmissions(data); }
+    catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }, []);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
@@ -235,6 +242,8 @@ export default function DashboardPage() {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+
+  const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
 
   const handlePhotoFile = async (file: File) => {
     if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
@@ -322,7 +331,7 @@ export default function DashboardPage() {
         const photo = await saveFieldPhoto({ src: cloudUrl, caption: item.caption }, token);
         setFieldPhotos(prev => [...prev, photo]);
         saved++;
-      } catch (e: any) {
+      } catch {
         errors.push(item.file.name);
       }
     }
@@ -337,8 +346,8 @@ export default function DashboardPage() {
   const handleFieldPhotoDelete = async (id: string) => {
     if (!token) return;
     try {
-      await deleteFieldPhoto(id, token);
-      setFieldPhotos(prev => prev.filter(p => p.id !== id));
+      await deleteFieldPhoto(String(id), token);
+      setFieldPhotos(prev => prev.filter(p => String(p.id) !== String(id)));
       setDeletingFieldId(null);
       showToast('Photo deleted.', 'success');
     } catch {
@@ -355,13 +364,7 @@ export default function DashboardPage() {
     setFieldFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const loadSubmissions = async (jwt: string) => {
-    try { const data = await fetchSubmissions(jwt); setSubmissions(data); }
-    catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
 
-  const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
 
   const handleVideoFile = (file: File) => {
     if (!file.type.startsWith('video/')) { showToast('Please select a video file.', 'error'); return; }
@@ -402,8 +405,9 @@ export default function DashboardPage() {
       clearVideoFile();
       loadSubmissions(token);
       setActiveTab('submissions');
-    } catch (err: any) {
-      showToast(err.message || 'Failed to upload', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to upload';
+      showToast(msg, 'error');
     } finally { setUploading(false); setVideoUploadProgress(0); }
   };
 
@@ -425,8 +429,9 @@ export default function DashboardPage() {
       showToast('Video updated!', 'success');
       setEditingVideo(null);
       loadSubmissions(token);
-    } catch (err: any) {
-      showToast(err.message || 'Update failed', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Update failed';
+      showToast(msg, 'error');
     } finally { setSaving(false); }
   };
 
@@ -437,8 +442,9 @@ export default function DashboardPage() {
       await deleteVideo(video.id, token);
       showToast('Video deleted.', 'success');
       loadSubmissions(token);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to delete', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete';
+      showToast(msg, 'error');
     }
   };
 
@@ -962,7 +968,10 @@ export default function DashboardPage() {
                           >
                             {videoFile ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                <div style={{ fontSize: 32 }}>🎬</div>
+                                {videoFilePreview
+                                  ? <video src={videoFilePreview} muted style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                                  : <div style={{ fontSize: 32 }}>🎬</div>
+                                }
                                 <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
                                   <p style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{videoFile.name}</p>
                                   <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>{(videoFile.size / 1024 / 1024).toFixed(1)} MB</p>
@@ -1337,7 +1346,7 @@ export default function DashboardPage() {
                     {fieldSaving ? <><span className="spinner" /> Saving…</> : <><span>💾</span> Save {fieldFiles.length > 0 ? `${fieldFiles.length} ` : ''}Photo{fieldFiles.length !== 1 ? 's' : ''}</>}
                   </button>
                   {fieldFiles.length > 0 && (
-                    <button onClick={() => setFieldPreviews([])} className="btn-cancel">Clear all</button>
+                    <button onClick={() => setFieldFiles([])} className="btn-cancel">Clear all</button>
                   )}
                 </div>
               </div>
