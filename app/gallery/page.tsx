@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { BASE_URL, fetchFieldPhotos, type Submission, type FieldPhoto } from '../../lib/api';
+import { BASE_URL, fetchFieldPhotos, fetchPhotoOfMonth, type Submission, type FieldPhoto, type PhotoOfMonth } from '../../lib/api';
 
 // ─── YouTube helpers ───────────────────────────────────────────────────────────
 
@@ -386,8 +386,8 @@ export default function GalleryPage() {
   const [error, setError] = useState('');
   const [activeVideo, setActiveVideo] = useState<number | null>(null);
 
-  // Photo of the Month — read from localStorage (set via admin dashboard)
-  const [photoOfMonth, setPhotoOfMonth] = useState<{ src: string; caption: string; month: string } | null>(null);
+  // Photo of the Month — fetched from backend (set via admin dashboard)
+  const [photoOfMonth, setPhotoOfMonth] = useState<PhotoOfMonth | null>(null);
 
   // Photos from the Field — read from localStorage (set via admin dashboard)
   const [fieldPhotos, setFieldPhotos] = useState<FieldPhoto[] | null>(null);
@@ -443,10 +443,7 @@ export default function GalleryPage() {
   useEffect(() => { loadMessages(); }, [loadMessages]);
   useEffect(() => { loadFieldPhotos(); }, [loadFieldPhotos]);
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('oyaib_photo_of_month');
-      if (saved) setPhotoOfMonth(JSON.parse(saved));
-    } catch {}
+    fetchPhotoOfMonth().then(data => setPhotoOfMonth(data));
   }, []);
 
   function handleNewMessage(msg: Message) {

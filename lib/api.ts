@@ -224,3 +224,44 @@ export async function deleteFieldPhoto(
     method: 'DELETE',
   }, token);
 }
+
+// ─── Photo of the Month ───────────────────────────────────────────────────────
+
+export interface PhotoOfMonth {
+  id: number;
+  src: string;
+  caption?: string;
+  month?: string;
+  createdAt: string;
+}
+
+/** GET /photo-of-month – Fetch the current photo of the month (public) */
+export async function fetchPhotoOfMonth(): Promise<PhotoOfMonth | null> {
+  try {
+    return await request<PhotoOfMonth>('/photo-of-month');
+  } catch (err: any) {
+    if (err?.status === 404) return null;
+    return null;
+  }
+}
+
+/** POST /photo-of-month – Save a new photo of the month (admin only) */
+export async function savePhotoOfMonth(
+  payload: { src: string; caption?: string; month?: string },
+  token: string,
+): Promise<PhotoOfMonth> {
+  return request<PhotoOfMonth>('/photo-of-month', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, token);
+}
+
+/** DELETE /photo-of-month/:id – Delete the photo of the month (admin only) */
+export async function deletePhotoOfMonth(
+  id: number,
+  token: string,
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/photo-of-month/${id}`, {
+    method: 'DELETE',
+  }, token);
+}

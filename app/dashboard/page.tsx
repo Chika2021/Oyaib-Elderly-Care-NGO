@@ -80,6 +80,39 @@ async function getFieldPhotos(): Promise<FieldPhoto[]> {
   return res.json();
 }
 
+// ── Photo of the Month API helpers ──
+interface PhotoOfMonth { id: number; src: string; caption: string; month: string; }
+
+async function getPhotoOfMonth(): Promise<PhotoOfMonth | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/photo-of-month`, { cache: 'no-store' });
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
+}
+
+async function savePhotoOfMonth(
+  payload: { src: string; caption: string; month: string },
+  jwt: string
+): Promise<PhotoOfMonth> {
+  const res = await fetch(`${BASE_URL}/photo-of-month`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to save Photo of the Month');
+  return res.json();
+}
+
+async function deletePhotoOfMonth(id: number, jwt: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/photo-of-month/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${jwt}` },
+  });
+  if (!res.ok) throw new Error('Failed to delete Photo of the Month');
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const TYPE_META: Record<string, { label: string; color: string; bg: string; icon: string }> = {
@@ -196,8 +229,9 @@ export default function DashboardPage() {
   const [editForm, setEditForm] = useState({ fullName: '', email: '', youtubeUrl: '', title: '', description: '' });
   const [saving, setSaving] = useState(false);
 
-  // ── Photo of the Month (no backend — stored in localStorage as base64) ──
-  const [photoOfMonth, setPhotoOfMonth] = useState<{ src: string; caption: string; month: string } | null>(null);
+  // ── Photo of the Month — loaded from backend, uploaded to Cloudinary ──
+  const [photoOfMonth, setPhotoOfMonth] = useState<PhotoOfMonth | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoCaption, setPhotoCaption] = useState('');
   const [photoMonthLabel, setPhotoMonthLabel] = useState('');
@@ -226,11 +260,8 @@ export default function DashboardPage() {
     if (!savedToken) { router.push('/login'); return; }
     setToken(savedToken);
     loadSubmissions(savedToken);
-    // Load saved photo
-    try {
-      const saved = localStorage.getItem('oyaib_photo_of_month');
-      if (saved) setPhotoOfMonth(JSON.parse(saved));
-    } catch {}
+    // Load Photo of the Month from backend
+    getPhotoOfMonth().then(data => setPhotoOfMonth(data));
     // Load field photos from API
     getFieldPhotos().then(setFieldPhotos).catch(() => setFieldPhotos([]));
   }, []);
@@ -245,11 +276,11 @@ export default function DashboardPage() {
 
   const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
 
-  const handlePhotoFile = async (file: File) => {
+  const handlePhotoFile = (file: File) => {
     if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
     if (file.size > 8 * 1024 * 1024) { showToast('Image must be under 8 MB.', 'error'); return; }
-    const base64 = await readFileAsBase64(file);
-    setPhotoPreview(base64);
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
 
   const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,35 +294,44 @@ export default function DashboardPage() {
     if (file) handlePhotoFile(file);
   };
 
-  const handlePhotoSave = () => {
-    if (!photoPreview) return;
+  const handlePhotoSave = async () => {
+    if (!photoFile || !token) return;
     setPhotoSaving(true);
-    setTimeout(() => {
-      const data = { src: photoPreview, caption: photoCaption, month: photoMonthLabel };
-      try {
-        localStorage.setItem('oyaib_photo_of_month', JSON.stringify(data));
-        setPhotoOfMonth(data);
-        setPhotoPreview(null);
-        setPhotoCaption('');
-        setPhotoMonthLabel('');
-        if (photoFileRef.current) photoFileRef.current.value = '';
-        showToast('Photo of the Month saved!', 'success');
-      } catch {
-        showToast('Storage full — try a smaller image.', 'error');
-      }
+    try {
+      // 1. Upload image to Cloudinary
+      const cloudUrl = await uploadToCloudinary(photoFile);
+      // 2. Save URL + metadata to backend
+      const saved = await savePhotoOfMonth({ src: cloudUrl, caption: photoCaption, month: photoMonthLabel }, token);
+      setPhotoOfMonth(saved);
+      handlePhotoClear();
+      showToast('Photo of the Month saved!', 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      showToast(msg, 'error');
+    } finally {
       setPhotoSaving(false);
-    }, 500);
+    }
   };
 
-  const handlePhotoDelete = () => {
-    localStorage.removeItem('oyaib_photo_of_month');
-    setPhotoOfMonth(null);
-    setConfirmDelete(false);
-    showToast('Photo of the Month removed.', 'success');
+  const handlePhotoDelete = async () => {
+    if (!photoOfMonth || !token) return;
+    try {
+      await deletePhotoOfMonth(photoOfMonth.id, token);
+      setPhotoOfMonth(null);
+      setConfirmDelete(false);
+      showToast('Photo of the Month removed.', 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Delete failed';
+      showToast(msg, 'error');
+    }
   };
 
   const handlePhotoClear = () => {
-    setPhotoPreview(null); setPhotoCaption(''); setPhotoMonthLabel('');
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoCaption('');
+    setPhotoMonthLabel('');
     if (photoFileRef.current) photoFileRef.current.value = '';
   };
 
@@ -1040,7 +1080,7 @@ export default function DashboardPage() {
           {activeTab === 'photo' && (
             <div className="page-content" style={{ animation: 'fadeIn 0.4s ease' }}>
               <p style={{ color: '#64748b', marginBottom: 24, fontSize: '0.9rem' }}>
-                Upload a photo to feature as the Photo of the Month. It's stored in the browser and persists across sessions.
+                Upload a photo to feature as the Photo of the Month. It will be stored on Cloudinary and visible on all devices and browsers.
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, alignItems: 'start' }}>
@@ -1136,15 +1176,15 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button
                       onClick={handlePhotoSave}
-                      disabled={!photoPreview || photoSaving}
+                      disabled={!photoFile || photoSaving}
                       className="btn-primary"
                       style={{ flex: 1, justifyContent: 'center',
-                        background: !photoPreview || photoSaving
+                        background: !photoFile || photoSaving
                           ? undefined
                           : 'linear-gradient(135deg,#c8970a,#a67c08)' }}
                     >
                       {photoSaving
-                        ? <><span className="spinner" /> Saving…</>
+                        ? <><span className="spinner" /> Uploading…</>
                         : <><span>💾</span> Save Photo</>}
                     </button>
                     {photoPreview && (
@@ -1185,11 +1225,7 @@ export default function DashboardPage() {
                       )}
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button
-                          onClick={() => {
-                            setPhotoPreview(photoOfMonth.src);
-                            setPhotoCaption(photoOfMonth.caption);
-                            setPhotoMonthLabel(photoOfMonth.month);
-                          }}
+                          onClick={() => { handlePhotoClear(); setTimeout(() => photoFileRef.current?.click(), 50); }}
                           className="btn-edit"
                           style={{ fontSize: '0.85rem', padding: '8px 16px' }}
                         >
